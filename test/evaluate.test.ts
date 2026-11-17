@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectVersion, evaluate } from '../src/core';
+import { detectVersion, evaluate, evaluateLayers } from '../src/core';
 import type { ClassicScores, IssueCode, V4Scores } from '../src/core';
 
 const codes = (input: string, opts = {}) => evaluate(input, opts).issues.map((i) => i.code);
@@ -28,24 +28,50 @@ describe('known scores', () => {
     expect(v4(base + '/E:X/S:P/U:Red')).toMatchObject({ score: { score: 9.3 }, nomenclature: 'CVSS-B' });
   });
 
-  it('computes 2.0 temporal and environmental scores', () => {
-    const s = classic('AV:N/AC:L/Au:N/C:P/I:P/A:P/E:F/RL:OF/RC:C/CDP:H/TD:H/CR:H/IR:H/AR:H');
-    // AdjustedImpact 8.33 → AdjustedBase 8.8 → AdjustedTemporal 7.27 → 7.3; (7.3 + 2.7 × 0.5) × 1 = 8.65 → 8.7
-    expect([s.base.score, s.temporal.score, s.environmental.score]).toEqual([7.5, 6.2, 8.7]);
-    expect(s.temporalDefined && s.environmentalDefined).toBe(true);
-  });
+  describe('2.0 temporal and environmental methods', () => {
+    const full = 'AV:N/AC:L/Au:N/C:P/I:P/A:P/E:F/RL:OF/RC:C/CDP:H/TD:H/CR:H/IR:H/AR:H';
 
-  // Hand-checked 2.0 cases on rounding boundaries, following the v2 guide:
-  // AdjustedTemporal is rounded, and x.x5 rounds up.
-  it.each([
-    // Temporal 2.1 × 0.9 = 1.89 → 1.9; (1.9 + 8.1 × 0.5) = 5.95 → 6.0
-    ['AV:N/AC:H/Au:S/C:N/I:N/A:P/E:H/RC:UC/CDP:H/CR:L', 6.0],
-    // AdjustedBase 2.8 → AdjustedTemporal 2.52 → 2.5; (2.5 + 7.5 × 0.1) × 0.75 = 2.4375 → 2.4
-    ['AV:L/AC:L/Au:N/C:P/I:P/A:N/E:ND/RC:UC/CDP:L/TD:M/CR:ND/IR:L', 2.4],
-    // Base 5.0 × 0.87 = 4.35 → 4.4
-    ['AV:L/AC:L/Au:M/C:C/I:P/A:N/E:H/RL:OF/CDP:N/TD:H/CR:M', 4.4],
-  ])('2.0 environmental %s → %s', (vector, expected) => {
-    expect(classic(vector).environmental.score).toBe(expected);
+    it('uses the NVD method by default', () => {
+      const s = classic(full);
+      // AdjustedBase 8.8166 (not rounded) × 0.95 × 0.87 = 7.2869; 7.2869 + 2.7131 × 0.5 = 8.643 → 8.6
+      expect([s.base.score, s.temporal.score, s.environmental.score]).toEqual([7.5, 6.2, 8.6]);
+      expect(s.temporalDefined && s.environmentalDefined).toBe(true);
+    });
+
+    it('follows the spec with v2Method: spec', () => {
+      const s = classic(full, { v2Method: 'spec' });
+      // AdjustedBase 8.8 → AdjustedTemporal 7.27 → 7.3; (7.3 + 2.7 × 0.5) × 1 = 8.65 → 8.7
+      expect([s.base.score, s.temporal.score, s.environmental.score]).toEqual([7.5, 6.2, 8.7]);
+    });
+
+    // Hand-checked cases where the methods differ.
+    it.each([
+      // NVD: AdjustedBase 2.0905 (Exploitability 3.9) × 0.9 = 1.8815; 1.8815 + 8.1185 × 0.5 = 5.941 → 5.9
+      // Spec: Temporal 2.1 × 0.9 = 1.89 → 1.9; 1.9 + 8.1 × 0.5 = 5.95 → 6.0
+      ['AV:N/AC:H/Au:S/C:N/I:N/A:P/E:H/RC:UC/CDP:H/CR:L', 5.9, 6.0],
+      // NVD: AdjustedBase 2.8228 × 0.9 = 2.5405; (2.5405 + 7.4595 × 0.1) × 0.75 = 2.465 → 2.5
+      // Spec: AdjustedBase 2.8 → AdjustedTemporal 2.52 → 2.5; (2.5 + 7.5 × 0.1) × 0.75 = 2.4375 → 2.4
+      ['AV:L/AC:L/Au:N/C:P/I:P/A:N/E:ND/RC:UC/CDP:L/TD:M/CR:ND/IR:L', 2.5, 2.4],
+      // NVD: AdjustedBase 4.9467 × 0.87 = 4.3036 → 4.3
+      // Spec: AdjustedBase 5.0 × 0.87 = 4.35 → 4.4
+      ['AV:L/AC:L/Au:M/C:C/I:P/A:N/E:H/RL:OF/CDP:N/TD:H/CR:M', 4.3, 4.4],
+    ])('%s → NVD %s, spec %s', (vector, nvd, spec) => {
+      expect(classic(vector).environmental.score).toBe(nvd);
+      expect(classic(vector, { v2Method: 'spec' }).environmental.score).toBe(spec);
+    });
+
+    it('uses the Temporal score as Environmental when no environmental metric is set', () => {
+      const s = classic('AV:N/AC:L/Au:N/C:P/I:P/A:P/E:F/RL:OF');
+      expect(s.environmentalDefined).toBe(false);
+      expect(s.environmental.score).toBe(s.temporal.score);
+    });
+
+    it('passes the method through layers', () => {
+      const layers = [{ id: 'asset', vector: 'CDP:H/TD:H/CR:H/IR:H/AR:H' }];
+      const base = 'AV:N/AC:L/Au:N/C:P/I:P/A:P/E:F/RL:OF/RC:C';
+      const env = (o = {}) => (evaluateLayers(base, layers, o).scores as ClassicScores).environmental.score;
+      expect([env(), env({ v2Method: 'spec' })]).toEqual([8.6, 8.7]);
+    });
   });
 
   it('marks temporal and environmental groups as not defined', () => {

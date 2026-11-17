@@ -34,24 +34,29 @@ describe('differential: classic versions', () => {
     it(`CVSS ${version} matches reference on ${N} random vectors`, () => {
       const rand = rng(42 + Number(version.replace('.', '')));
       const mismatches: string[] = [];
+      let v2RoundingDiffs = 0;
       for (let n = 0; n < N; n++) {
         const vector = randomVector(version, rand);
         const ours = evaluate(vector).scores as ClassicScores;
         const ref = new Ref(vector).calculateScores() as unknown as Record<string, number | undefined>;
-        // For 2.0, the reference skips the spec's rounding of AdjustedTemporal and
-        // lets floating-point noise decide x.x5 boundaries, so allow ±0.1 there.
-        // test/evaluate.test.ts pins those boundary cases with hand-checked values.
+        // For 2.0, both we (by default) and the reference follow NVD's calculator, but the
+        // reference rounds differently in rare floating-point cases, so allow a few ±0.1
+        // differences there. test/evaluate.test.ts pins hand-checked 2.0 cases.
         const check = (name: string, a: number, b: number | undefined) => {
-          const tolerance = version === '2.0' && name !== 'base' ? 0.1 + 1e-9 : 0;
-          if (b !== undefined && Math.abs(a - b) > tolerance) {
-            mismatches.push(`${vector} ${name}: ours=${a} ref=${b}`);
+          if (b === undefined || a === b) return;
+          if (version === '2.0' && name !== 'base' && Math.abs(a - b) <= 0.1 + 1e-9) {
+            v2RoundingDiffs++;
+            return;
           }
+          mismatches.push(`${vector} ${name}: ours=${a} ref=${b}`);
         };
         check('base', ours.base.score, ref.base);
         check('temporal', ours.temporal.score, ref.temporal);
         check('environmental', ours.environmental.score, ref.environmental);
       }
       expect(mismatches.slice(0, 10)).toEqual([]);
+      // Under 0.5% of 2.0 vectors may differ by 0.1 (about 0.06% in a 100,000-vector run).
+      expect(v2RoundingDiffs).toBeLessThan(N * 0.005);
     });
   }
 });

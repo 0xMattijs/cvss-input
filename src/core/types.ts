@@ -115,6 +115,8 @@ export interface EvaluateOptions {
    * Default: 1024. The longest valid vector is 178 characters (CVSS 4.0 with every metric set).
    */
   maxLength?: number;
+  /** CVSS 2.0 temporal and environmental method: `nvd` (default) or `spec`. See `V2Method`. */
+  v2Method?: 'nvd' | 'spec';
 }
 
 export interface CvssResult {
@@ -201,6 +203,8 @@ export interface LayeredOptions {
   conflict?: ConflictRule;
   /** Maximum length of the base vector and of each layer vector. Default: 1024. */
   maxLength?: number;
+  /** CVSS 2.0 temporal and environmental method: `nvd` (default) or `spec`. */
+  v2Method?: 'nvd' | 'spec';
 }
 
 export interface LayerOutcome {

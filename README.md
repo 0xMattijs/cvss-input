@@ -45,6 +45,7 @@ import 'cvss-input/styles.css';
 | `version` | `'auto'` | `'auto'`, `'2.0'`, `'3.0'`, `'3.1'`, or `'4.0'`. |
 | `baseVector` | — | Complete vector that supplies the base metrics. The input then accepts only non-base metrics. |
 | `strict` | `false` | Treats non-canonical metric order and a missing prefix (forced 3.x or 4.0) as errors. |
+| `v2Method` | `'nvd'` | CVSS 2.0 Temporal and Environmental method: `'nvd'` or `'spec'`. See [Scoring notes](#scoring-notes). |
 | `maxLength` | `1024` | Longest accepted vector. The field won't accept more, and longer values get one `TOO_LONG` error. |
 | `normalizeOnBlur` | `!strict` | Rewrites a valid vector in canonical form when the text field loses focus. |
 | `mode` | `'both'` | `'text'`, `'picker'`, or `'both'`. |
@@ -65,7 +66,7 @@ result.issues;      // [{ severity: 'warning', code: 'METRIC_ORDER', ... }]
 result.scores;      // { kind: 'classic', base: { score: 9.8, severity: 'Critical' }, ... }
 ```
 
-`evaluate(input, { version, strict, baseVector })` returns:
+`evaluate(input, { version, strict, baseVector, maxLength, v2Method })` returns:
 
 - `version`: the version used for validation and scoring, and `detectedVersion`: what the input itself says.
 - `issues`: errors and warnings with a `code`, a `message`, and, where it applies, `metric` and the `start`/`end` character range in the input.
@@ -215,8 +216,13 @@ labels can't inject HTML. If you use the core or your own UI, follow these rules
   (BSD-2-Clause), including its MacroVector lookup table. Like the current FIRST calculator, it adds an
   epsilon before rounding so that values such as 5.6499999… round to 5.7.
 - **3.0 and 3.1** use their own Roundup functions and their own Environmental formulas for a changed scope.
-- **2.0** rounds AdjustedTemporal, as the v2 specification requires, and rounds x.x5 up. Its severity
-  ratings are the NVD bands (Low, Medium, High), because CVSS 2.0 defines none.
+  The 3.1 code matches FIRST's official calculator (`cvsscalc31.js`).
+- **2.0** Temporal and Environmental scores follow NVD's CVSS 2.0 calculator by default, because most
+  published 2.0 scores come from it. NVD's calculator differs from the 2.0 specification: it doesn't round
+  AdjustedBase or AdjustedTemporal, and it uses the rounded Exploitability subscore. As a result, about 15%
+  of fully specified 2.0 Environmental scores differ by 0.1 between the two methods. Pass
+  `v2Method: 'spec'` (or the `v2Method="spec"` prop) for the literal specification. Base scores are the
+  same either way. Severity ratings are the NVD bands (Low, Medium, High), because CVSS 2.0 defines none.
 
 ## Development
 
@@ -248,9 +254,13 @@ and enter owner `0xMattijs`, repository `cvss-input`, workflow `release.yml`, an
 
 ### Tests
 
-The differential tests score 5,000 random vectors per version and compare them with
-[ae-cvss-calculator](https://www.npmjs.com/package/ae-cvss-calculator). Base, Temporal, and Environmental
-scores for 3.0 and 3.1, and all 4.0 scores, must match exactly. For 2.0, only Base must match exactly:
-the reference library doesn't round AdjustedTemporal and lets floating-point noise decide x.x5 cases, so
-Temporal and Environmental may differ by 0.1. `test/evaluate.test.ts` pins those boundary cases with
-hand-checked values.
+- **Official scores.** `test/nvd.test.ts` checks 2,169 unique vectors and scores from the NVD CVE API,
+  calculated by NVD or by the CNA that reported the CVE: Base scores for every version, and 126 CVSS 4.0
+  vectors with threat metrics. All match. Regenerate the fixture with
+  `node scripts/fetch-nvd-fixtures.mjs`. NVD publishes no 2.0 or 3.x Temporal or Environmental scores.
+- **Differential tests.** `test/differential.test.ts` scores 5,000 random vectors per version, with
+  temporal and environmental metrics set, and compares them with
+  [ae-cvss-calculator](https://www.npmjs.com/package/ae-cvss-calculator). Everything must match exactly,
+  except that under 0.5% of 2.0 Temporal and Environmental scores may differ by 0.1, where the two
+  implementations round floating-point values differently.
+- **Hand-checked cases.** `test/evaluate.test.ts` pins 2.0 rounding cases for both methods.

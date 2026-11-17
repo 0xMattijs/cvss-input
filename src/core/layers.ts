@@ -60,8 +60,8 @@ export function evaluateLayers(
   layers: CvssLayer[],
   options: LayeredOptions = {},
 ): LayeredResult {
-  const { version: mode = 'auto', strict = false, conflict = 'error', maxLength } = options;
-  const base = evaluate(baseVector, { version: mode, strict, maxLength });
+  const { version: mode = 'auto', strict = false, conflict = 'error', maxLength, v2Method } = options;
+  const base = evaluate(baseVector, { version: mode, strict, maxLength, v2Method });
   const issues: CvssIssue[] = base.issues.map((i) => ({ ...i, layer: 'base' }));
 
   const empty = (outcomes: LayerOutcome[]): LayeredResult => ({
@@ -254,7 +254,7 @@ export function evaluateLayers(
     provenance,
     overrides,
     combined: valid ? serialize(version, effectiveMetrics) : null,
-    scores: valid ? scoreFor(version, effectiveMetrics) : null,
+    scores: valid ? scoreFor(version, effectiveMetrics, { v2Method }) : null,
     issues,
     valid,
   };

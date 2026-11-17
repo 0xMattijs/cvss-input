@@ -42,23 +42,32 @@ const V2 = {
 const get = <T extends Record<string, number>>(table: T, value: string | undefined, fallback: keyof T) =>
   table[(value ?? fallback) as keyof T] ?? table[fallback];
 
-export function scoreV2(m: Metrics): ClassicScores {
+/**
+ * How to calculate CVSS 2.0 temporal and environmental scores.
+ *
+ * - `nvd` (default): exactly like NVD's CVSS 2.0 calculator, which most published
+ *   2.0 scores come from. It doesn't round AdjustedBase or AdjustedTemporal, uses
+ *   the rounded Exploitability subscore in AdjustedBase, and rounds with
+ *   `Math.round` on decimal strings, so floating-point noise decides some x.x5 cases.
+ * - `spec`: the literal CVSS 2.0 specification. AdjustedTemporal is the Temporal
+ *   score recalculated, including its rounding, and x.x5 always rounds up.
+ *
+ * Base scores are the same in both.
+ */
+export type V2Method = 'nvd' | 'spec';
+
+/** NVD's toFixed1: rounds via an exponent string, as in its calculator. */
+function nvdRound1(x: number): number {
+  return +(Math.round(+(x.toString() + 'e1')).toString() + 'e-1');
+}
+
+export function scoreV2(m: Metrics, method: V2Method = 'nvd'): ClassicScores {
   const c = get(V2.CIA, m.C, 'N');
   const i = get(V2.CIA, m.I, 'N');
   const a = get(V2.CIA, m.A, 'N');
   const exploitability = 20 * get(V2.AV, m.AV, 'N') * get(V2.AC, m.AC, 'L') * get(V2.Au, m.Au, 'N');
-
-  const baseEquation = (impact: number) => {
-    const f = impact === 0 ? 0 : 1.176;
-    return round1((0.6 * impact + 0.4 * exploitability - 1.5) * f);
-  };
-  const temporalMultiplier = (base: number) =>
-    round1(base * get(V2.E, m.E, 'ND') * get(V2.RL, m.RL, 'ND') * get(V2.RC, m.RC, 'ND'));
-
+  const multiplier = get(V2.E, m.E, 'ND') * get(V2.RL, m.RL, 'ND') * get(V2.RC, m.RC, 'ND');
   const impact = 10.41 * (1 - (1 - c) * (1 - i) * (1 - a));
-  const base = baseEquation(impact);
-  const temporal = temporalMultiplier(base);
-
   const adjustedImpact = Math.min(
     10,
     10.41 *
@@ -67,9 +76,37 @@ export function scoreV2(m: Metrics): ClassicScores {
           (1 - i * get(V2.REQ, m.IR, 'ND')) *
           (1 - a * get(V2.REQ, m.AR, 'ND'))),
   );
-  const adjustedTemporal = temporalMultiplier(baseEquation(adjustedImpact));
   const cdp = get(V2.CDP, m.CDP, 'ND');
-  const environmental = round1((adjustedTemporal + (10 - adjustedTemporal) * cdp) * get(V2.TD, m.TD, 'ND'));
+  const td = get(V2.TD, m.TD, 'ND');
+  const temporalDefined = isDefined(m, ['E', 'RL', 'RC'], 'ND');
+  const environmentalDefined = isDefined(m, ['CDP', 'TD', 'CR', 'IR', 'AR'], 'ND');
+
+  let base: number;
+  let temporal: number;
+  let environmental: number;
+
+  if (method === 'nvd') {
+    // Port of NVD's calculateScoresInternal and environComputations.
+    const f = impact === 0 ? 0 : 1.176;
+    base = nvdRound1((0.6 * impact + 0.4 * exploitability - 1.5) * f);
+    temporal = temporalDefined ? nvdRound1(base * multiplier) : base;
+    if (environmentalDefined) {
+      const adjustedBase = (0.6 * adjustedImpact + 0.4 * nvdRound1(exploitability) - 1.5) * f;
+      const adjustedTemporal = temporalDefined ? adjustedBase * multiplier : adjustedBase;
+      environmental = nvdRound1((adjustedTemporal + (10 - adjustedTemporal) * cdp) * td);
+    } else {
+      environmental = temporal;
+    }
+  } else {
+    const baseEquation = (imp: number) => {
+      const f = imp === 0 ? 0 : 1.176;
+      return round1((0.6 * imp + 0.4 * exploitability - 1.5) * f);
+    };
+    base = baseEquation(impact);
+    temporal = round1(base * multiplier);
+    const adjustedTemporal = round1(baseEquation(adjustedImpact) * multiplier);
+    environmental = round1((adjustedTemporal + (10 - adjustedTemporal) * cdp) * td);
+  }
 
   return {
     kind: 'classic',
@@ -77,8 +114,8 @@ export function scoreV2(m: Metrics): ClassicScores {
     base: { score: base, severity: severityV2(base) },
     temporal: { score: temporal, severity: severityV2(temporal) },
     environmental: { score: environmental, severity: severityV2(environmental) },
-    temporalDefined: isDefined(m, ['E', 'RL', 'RC'], 'ND'),
-    environmentalDefined: isDefined(m, ['CDP', 'TD', 'CR', 'IR', 'AR'], 'ND'),
+    temporalDefined,
+    environmentalDefined,
     impact: round1(impact),
     exploitability: round1(exploitability),
   };

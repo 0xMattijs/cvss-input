@@ -140,10 +140,14 @@ export function serialize(
   return parts.join('/');
 }
 
-export function scoreFor(version: CvssVersion, metrics: Record<string, string>): CvssScores {
+export function scoreFor(
+  version: CvssVersion,
+  metrics: Record<string, string>,
+  options: { v2Method?: 'nvd' | 'spec' } = {},
+): CvssScores {
   switch (version) {
     case '2.0':
-      return scoreV2(metrics);
+      return scoreV2(metrics, options.v2Method);
     case '3.0':
     case '3.1':
       return scoreV3(metrics, version);
@@ -181,7 +185,7 @@ function capIssues(issues: CvssIssue[]): CvssIssue[] {
  * // { kind: 'classic', base: { score: 9.8, severity: 'Critical' }, ... }
  */
 export function evaluate(input: string, options: EvaluateOptions = {}): CvssResult {
-  const { version: mode = 'auto', strict = false, baseVector, maxLength = DEFAULT_MAX_LENGTH } = options;
+  const { version: mode = 'auto', strict = false, baseVector, maxLength = DEFAULT_MAX_LENGTH, v2Method } = options;
   const overlay = baseVector !== undefined;
   const issues: CvssIssue[] = [];
 
@@ -213,7 +217,7 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
   // In overlay mode, the base vector decides the version.
   let base: CvssResult | null = null;
   if (overlay) {
-    base = evaluate(baseVector, { version: mode, strict, maxLength });
+    base = evaluate(baseVector, { version: mode, strict, maxLength, v2Method });
     if (!base.valid || !base.version) {
       issues.push({
         severity: 'error',
@@ -421,6 +425,6 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
     normalized,
     combined: serialize(version, effectiveMetrics),
     valid: true,
-    scores: scoreFor(version, effectiveMetrics),
+    scores: scoreFor(version, effectiveMetrics, { v2Method }),
   });
 }

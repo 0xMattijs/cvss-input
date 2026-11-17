@@ -10,6 +10,8 @@ export interface UseCvssLayersOptions {
   conflict?: ConflictRule;
   /** Maximum length of the base vector and of each layer vector. Default: 1024. */
   maxLength?: number;
+  /** CVSS 2.0 temporal and environmental method: `nvd` (default) or `spec`. */
+  v2Method?: 'nvd' | 'spec';
 }
 
 /** Combines a base vector with layers and scores the result. Memoized on content. */
@@ -18,12 +20,12 @@ export function useCvssLayers(
   layers: CvssLayer[],
   options: UseCvssLayersOptions = {},
 ): LayeredResult {
-  const { version, strict, conflict, maxLength } = options;
+  const { version, strict, conflict, maxLength, v2Method } = options;
   const key = JSON.stringify(layers);
   return useMemo(
-    () => evaluateLayers(baseVector, layers, { version, strict, conflict, maxLength }),
+    () => evaluateLayers(baseVector, layers, { version, strict, conflict, maxLength, v2Method }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseVector, key, version, strict, conflict, maxLength],
+    [baseVector, key, version, strict, conflict, maxLength, v2Method],
   );
 }
 
@@ -51,13 +53,14 @@ export function CvssCombined({
   strict,
   conflict,
   maxLength,
+  v2Method,
   title,
   showVector = true,
   showSources = true,
   showIssues = true,
   className,
 }: CvssCombinedProps) {
-  const r = useCvssLayers(baseVector, layers, { version, strict, conflict, maxLength });
+  const r = useCvssLayers(baseVector, layers, { version, strict, conflict, maxLength, v2Method });
   const labels: Record<string, string> = { base: 'Base vector' };
   for (const l of r.layers) labels[l.id] = l.label;
   const def = r.version ? VERSIONS[r.version] : null;

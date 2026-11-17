@@ -56,6 +56,8 @@ export interface CvssInputProps {
    * (for example from `value`) are rejected unparsed. Default: 1024.
    */
   maxLength?: number;
+  /** CVSS 2.0 temporal and environmental method: `nvd` (default) or `spec`. */
+  v2Method?: 'nvd' | 'spec';
   /** Rewrite the vector in canonical form when the text field loses focus. Default: `!strict`. */
   normalizeOnBlur?: boolean;
   /** Which editors to show. Default: `both`. */
@@ -119,6 +121,7 @@ function evaluateAll(
     layerId: string;
     conflict?: ConflictRule;
     maxLength: number;
+    v2Method?: 'nvd' | 'spec';
   },
 ): Evaluation {
   const own = evaluate(text, {
@@ -126,6 +129,7 @@ function evaluateAll(
     strict: opts.strict,
     baseVector: opts.baseVector,
     maxLength: opts.maxLength,
+    v2Method: opts.v2Method,
   });
   const built = buildLayers(text, opts.baseVector, opts.layers, opts.layerId);
   const layered = built
@@ -134,6 +138,7 @@ function evaluateAll(
         strict: opts.strict,
         conflict: opts.conflict,
         maxLength: opts.maxLength,
+        v2Method: opts.v2Method,
       })
     : null;
   return { own, layered };
@@ -150,6 +155,7 @@ export function CvssInput({
   conflict,
   strict = false,
   maxLength = DEFAULT_MAX_LENGTH,
+  v2Method,
   normalizeOnBlur = !strict,
   mode = 'both',
   defaultPickerVersion = '4.0',
@@ -164,10 +170,10 @@ export function CvssInput({
 
   const overlay = baseVector !== undefined;
   const layersKey = JSON.stringify(layers ?? null);
-  const evalOpts = { version, strict, baseVector, layers, layerId, conflict, maxLength };
+  const evalOpts = { version, strict, baseVector, layers, layerId, conflict, maxLength, v2Method };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const { own: result, layered } = useMemo(() => evaluateAll(text, evalOpts), [text, version, strict, baseVector, layersKey, layerId, conflict, maxLength]);
-  const base = useCvss(baseVector ?? '', { version, strict, maxLength });
+  const { own: result, layered } = useMemo(() => evaluateAll(text, evalOpts), [text, version, strict, baseVector, layersKey, layerId, conflict, maxLength, v2Method]);
+  const base = useCvss(baseVector ?? '', { version, strict, maxLength, v2Method });
 
   const emit = useCallback(
     (next: string) => {
@@ -178,7 +184,7 @@ export function CvssInput({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [controlled, onChange, version, strict, baseVector, layersKey, layerId, conflict, maxLength],
+    [controlled, onChange, version, strict, baseVector, layersKey, layerId, conflict, maxLength, v2Method],
   );
 
   const [emptyVersion, setEmptyVersion] = useState<CvssVersion>(defaultPickerVersion);
