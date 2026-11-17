@@ -1,12 +1,16 @@
 import { useCallback, useId, useMemo, useState } from 'react';
 import { ALL_VERSIONS, GROUP_LABELS, VERSIONS } from '../core/definitions';
 import { evaluate, serialize } from '../core/evaluate';
+import { evaluateLayers } from '../core/layers';
 import type {
+  ConflictRule,
   CvssIssue,
+  CvssLayer,
   CvssResult,
   CvssScores,
   CvssVersion,
   IssueCode,
+  LayeredResult,
   MetricGroup,
   ScoreValue,
   VersionMode,
@@ -18,15 +22,33 @@ export interface CvssInputProps {
   value?: string;
   /** Initial vector string (uncontrolled). */
   defaultValue?: string;
-  /** Called with the new vector and its evaluation on every edit. */
-  onChange?: (value: string, result: CvssResult) => void;
+  /**
+   * Called on every edit with the new vector, its own evaluation, and, when
+   * `baseVector` or `layers` is set, the combined evaluation.
+   */
+  onChange?: (value: string, result: CvssResult, layered: LayeredResult | null) => void;
   /** `auto` (default) detects the version; any other value forces and validates it. */
   version?: VersionMode;
   /**
-   * A complete vector that supplies the base metrics. The input then holds only
-   * temporal, threat, environmental, and supplemental metrics.
+   * A complete vector that supplies the base metrics. The input then edits one
+   * layer (see `layerId`) instead of the base vector.
    */
   baseVector?: string;
+  /**
+   * Other layers, such as a threat feed or an asset, shown as read-only context
+   * and included in the score. Without `baseVector`, the input edits the base
+   * vector and these layers apply on top of it.
+   */
+  layers?: CvssLayer[];
+  /**
+   * ID of the layer the input edits when `baseVector` is set. If `layers` has an
+   * entry with this ID, the input supplies its vector and the entry supplies its
+   * position, label, groups, and requirements. Otherwise the input is the last
+   * layer. Default: `input`.
+   */
+  layerId?: string;
+  /** How to resolve layers that set the same metric. Default: `error`. */
+  conflict?: ConflictRule;
   /** Treat non-canonical order and a missing 3.x/4.0 prefix as errors. Default: false. */
   strict?: boolean;
   /** Rewrite the vector in canonical form when the text field loses focus. Default: `!strict`. */
@@ -56,12 +78,60 @@ const STRUCTURAL: IssueCode[] = [
   'INVALID_BASE_VECTOR',
 ];
 
+/** Layer issues that `evaluate` alone doesn't produce for the edited layer. */
+const LAYER_ONLY: IssueCode[] = ['METRIC_NOT_ALLOWED_IN_LAYER', 'METRIC_CONFLICT', 'DUPLICATE_LAYER_ID'];
+
+interface Evaluation {
+  own: CvssResult;
+  layered: LayeredResult | null;
+}
+
+function buildLayers(
+  text: string,
+  baseVector: string | undefined,
+  layers: CvssLayer[] | undefined,
+  layerId: string,
+): { base: string; layers: CvssLayer[] } | null {
+  if (baseVector === undefined && layers === undefined) return null;
+  if (baseVector === undefined) return { base: text, layers: layers ?? [] };
+  const list = layers ?? [];
+  const index = list.findIndex((l) => l.id === layerId);
+  const own: CvssLayer =
+    index >= 0 ? { ...list[index], vector: text } : { id: layerId, label: 'This input', vector: text };
+  return {
+    base: baseVector,
+    layers: index >= 0 ? list.map((l, n) => (n === index ? own : l)) : [...list, own],
+  };
+}
+
+function evaluateAll(
+  text: string,
+  opts: {
+    version: VersionMode;
+    strict: boolean;
+    baseVector?: string;
+    layers?: CvssLayer[];
+    layerId: string;
+    conflict?: ConflictRule;
+  },
+): Evaluation {
+  const own = evaluate(text, { version: opts.version, strict: opts.strict, baseVector: opts.baseVector });
+  const built = buildLayers(text, opts.baseVector, opts.layers, opts.layerId);
+  const layered = built
+    ? evaluateLayers(built.base, built.layers, { version: opts.version, strict: opts.strict, conflict: opts.conflict })
+    : null;
+  return { own, layered };
+}
+
 export function CvssInput({
   value,
   defaultValue = '',
   onChange,
   version = 'auto',
   baseVector,
+  layers,
+  layerId = 'input',
+  conflict,
   strict = false,
   normalizeOnBlur = !strict,
   mode = 'both',
@@ -75,16 +145,23 @@ export function CvssInput({
   const controlled = value !== undefined;
   const text = controlled ? value : internal;
 
-  const result = useCvss(text, { version, strict, baseVector });
-  const base = useCvss(baseVector ?? '', { version, strict });
   const overlay = baseVector !== undefined;
+  const layersKey = JSON.stringify(layers ?? null);
+  const evalOpts = { version, strict, baseVector, layers, layerId, conflict };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { own: result, layered } = useMemo(() => evaluateAll(text, evalOpts), [text, version, strict, baseVector, layersKey, layerId, conflict]);
+  const base = useCvss(baseVector ?? '', { version, strict });
 
   const emit = useCallback(
     (next: string) => {
       if (!controlled) setInternal(next);
-      onChange?.(next, evaluate(next, { version, strict, baseVector }));
+      if (onChange) {
+        const e = evaluateAll(next, evalOpts);
+        onChange(next, e.own, e.layered);
+      }
     },
-    [controlled, onChange, version, strict, baseVector],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [controlled, onChange, version, strict, baseVector, layersKey, layerId, conflict],
   );
 
   const [emptyVersion, setEmptyVersion] = useState<CvssVersion>(defaultPickerVersion);
@@ -93,6 +170,10 @@ export function CvssInput({
     result.version ?? (overlay ? null : version !== 'auto' ? version : isEmpty ? emptyVersion : null);
   const structural = result.issues.filter((i) => STRUCTURAL.includes(i.code));
   const pickerBlocked = !isEmpty && structural.length > 0;
+
+  // The layer config for the edited layer, if any.
+  const ownLayerId = overlay ? layerId : 'base';
+  const ownLayer = overlay ? layers?.find((l) => l.id === layerId) : undefined;
 
   const setMetric = (key: string, code: string) => {
     if (!pickerVersion) return;
@@ -113,18 +194,61 @@ export function CvssInput({
     }
   };
 
+  // Issues: the input's own, plus layer issues from the combination.
+  const labels = useMemo(() => {
+    const map: Record<string, string> = { base: 'Base vector' };
+    for (const l of layered?.layers ?? []) map[l.id] = l.label;
+    return map;
+  }, [layered]);
+  const shownIssues: CvssIssue[] = [...result.issues];
+  if (layered) {
+    for (const issue of layered.issues) {
+      if (issue.code === 'INVALID_BASE_VECTOR') continue;
+      if (issue.layer === 'base') continue;
+      if (issue.layer === ownLayerId && !LAYER_ONLY.includes(issue.code)) continue;
+      shownIssues.push(issue);
+    }
+  }
+
   const id = useId();
   const inputId = `${id}-vector`;
   const issuesId = `${id}-issues`;
-  const errors = result.issues.filter((i) => i.severity === 'error');
+  // Only the input's own problems mark the field invalid, not other layers' conflicts.
+  const errors = shownIssues.filter(
+    (i) => i.severity === 'error' && (result.issues.includes(i) || i.layer === ownLayerId),
+  );
   const showIssues = !isEmpty || overlay;
+
+  // Picker context: values other layers set for each metric.
+  const context = useMemo(() => {
+    if (!layered) return null;
+    const map: Record<string, PickerContext[]> = {};
+    for (const l of layered.layers.filter((o) => o.id !== ownLayerId)) {
+      for (const [key, v] of Object.entries(l.metrics)) {
+        (map[key] ??= []).push({ label: l.label, value: v, applied: layered.provenance[key] === l.id });
+      }
+    }
+    if (overlay) {
+      // The base vector's own non-base metrics.
+      for (const [key, v] of Object.entries(layered.base.metrics)) {
+        const group = VERSIONS[layered.base.version!]?.metrics.find((m) => m.key === key)?.group;
+        if (group === 'base' || v === VERSIONS[layered.base.version!].notDefined) continue;
+        (map[key] ??= []).push({ label: 'Base vector', value: v, applied: layered.provenance[key] === 'base' });
+      }
+    }
+    const labelOf = (layer: string) => (layer === 'base' ? 'Base vector' : labels[layer] ?? layer);
+    return { map, ownId: ownLayerId, provenance: layered.provenance, labelOf };
+  }, [layered, overlay, ownLayerId, labels]);
+
+  const scores = layered ? layered.scores : result.scores;
+  const contextLayers = layered ? layered.layers.filter((l) => l.id !== ownLayerId) : [];
 
   return (
     <div className={['cvss', className].filter(Boolean).join(' ')} data-disabled={disabled || undefined}>
       {mode !== 'picker' && (
         <div className="cvss-field">
           <label className="cvss-label" htmlFor={inputId}>
-            {label ?? (overlay ? 'Temporal and environmental metrics' : 'CVSS vector')}
+            {label ?? (overlay ? (ownLayer?.label ?? 'Temporal and environmental metrics') : 'CVSS vector')}
           </label>
           <input
             id={inputId}
@@ -147,9 +271,27 @@ export function CvssInput({
 
       <VersionLine result={result} mode={version} overlay={overlay} baseResult={overlay ? base : null} />
 
+      {contextLayers.length > 0 && (
+        <div className="cvss-meta">
+          <span>Also applied:</span>
+          {contextLayers.map((l) => (
+            <span key={l.id} className="cvss-layer-chip">
+              {l.label}
+            </span>
+          ))}
+        </div>
+      )}
+
       <ul id={issuesId} className="cvss-issues" aria-live="polite">
         {showIssues &&
-          result.issues.map((issue, n) => <IssueItem key={n} issue={issue} input={text} />)}
+          shownIssues.map((issue, n) => (
+            <IssueItem
+              key={n}
+              issue={issue}
+              input={text}
+              layerLabel={issue.layer && issue.layer !== ownLayerId ? labels[issue.layer] : undefined}
+            />
+          ))}
       </ul>
 
       {!readOnly && !disabled && result.issues.some((i) => i.code === 'AMBIGUOUS_VERSION') && (
@@ -162,7 +304,14 @@ export function CvssInput({
         </div>
       )}
 
-      <ScorePanel scores={result.scores} />
+      <ScorePanel scores={scores} />
+
+      {layered?.combined && contextLayers.length > 0 && (
+        <div className="cvss-meta">
+          <span>Combined</span>
+          <code className="cvss-base-vector">{layered.combined}</code>
+        </div>
+      )}
 
       {mode !== 'text' && (
         <MetricPicker
@@ -172,6 +321,8 @@ export function CvssInput({
           blocked={pickerBlocked}
           disabled={disabled || readOnly}
           onSelect={setMetric}
+          allowedGroups={ownLayer?.groups ?? null}
+          context={context}
           versionChoice={
             !overlay && version === 'auto' && isEmpty
               ? { value: emptyVersion, onChange: setEmptyVersion }
@@ -228,17 +379,18 @@ function VersionLine({
   );
 }
 
-function IssueItem({ issue, input }: { issue: CvssIssue; input: string }) {
-  const excerpt = issue.start !== undefined && issue.end !== undefined ? input.slice(issue.start, issue.end) : null;
+function IssueItem({ issue, input, layerLabel }: { issue: CvssIssue; input: string; layerLabel?: string }) {
+  const hasRange = !layerLabel && issue.start !== undefined && issue.end !== undefined && input.length >= issue.end;
   return (
     <li className="cvss-issue" data-severity={issue.severity}>
       <span className="cvss-issue-kind">{issue.severity === 'error' ? 'Error' : 'Note'}</span>
       <span>
+        {layerLabel && <strong>{layerLabel}: </strong>}
         {issue.message}
-        {excerpt && issue.start !== undefined && (
+        {hasRange && (
           <>
             {' '}
-            <span className="cvss-issue-pos">(position {issue.start + 1})</span>
+            <span className="cvss-issue-pos">(position {issue.start! + 1})</span>
           </>
         )}
       </span>
@@ -319,6 +471,13 @@ function ScoreCell({
 
 // ---------------------------------------------------------------------------
 
+export interface PickerContext {
+  label: string;
+  value: string;
+  /** True if this layer's value is the one in the combined vector. */
+  applied: boolean;
+}
+
 const GROUP_ORDER: MetricGroup[] = ['base', 'temporal', 'threat', 'environmental', 'supplemental'];
 
 export function MetricPicker({
@@ -329,6 +488,8 @@ export function MetricPicker({
   disabled,
   onSelect,
   versionChoice,
+  allowedGroups = null,
+  context = null,
 }: {
   version: CvssVersion | null;
   metrics: Record<string, string>;
@@ -338,15 +499,24 @@ export function MetricPicker({
   disabled: boolean;
   onSelect: (key: string, code: string) => void;
   versionChoice: { value: CvssVersion; onChange: (v: CvssVersion) => void } | null;
+  /** Groups the edited layer may set; others are hidden. Null shows all. */
+  allowedGroups?: MetricGroup[] | null;
+  /** Values that other layers set, shown under each metric. */
+  context?: {
+    map: Record<string, PickerContext[]>;
+    ownId: string;
+    provenance: Record<string, string>;
+    labelOf: (layer: string) => string;
+  } | null;
 }) {
   const id = useId();
   const groups = useMemo(() => {
     if (!version) return [];
     const def = VERSIONS[version];
-    return GROUP_ORDER.map((g) => ({ group: g, metrics: def.metrics.filter((m) => m.group === g) })).filter(
-      (g) => g.metrics.length > 0,
-    );
-  }, [version]);
+    return GROUP_ORDER.filter((g) => g === 'base' || !allowedGroups || allowedGroups.includes(g))
+      .map((g) => ({ group: g, metrics: def.metrics.filter((m) => m.group === g) }))
+      .filter((g) => g.metrics.length > 0);
+  }, [version, allowedGroups]);
 
   if (!version) {
     return (
@@ -383,7 +553,11 @@ export function MetricPicker({
       {groups.map(({ group, metrics: groupMetrics }) => {
         const readOnlyGroup = baseMetrics !== null && group === 'base';
         const source = readOnlyGroup ? baseMetrics : metrics;
-        const anySet = groupMetrics.some((m) => source[m.key] !== undefined && source[m.key] !== def.notDefined);
+        const anySet = groupMetrics.some(
+          (m) =>
+            (source[m.key] !== undefined && source[m.key] !== def.notDefined) ||
+            (context?.map[m.key]?.length ?? 0) > 0,
+        );
         return (
           <details
             key={group}
@@ -397,6 +571,15 @@ export function MetricPicker({
             <div className="cvss-metrics">
               {groupMetrics.map((m) => {
                 const current = source[m.key] ?? (m.required ? undefined : def.notDefined ?? undefined);
+                const others = readOnlyGroup ? [] : (context?.map[m.key] ?? []);
+                const ownSet = !readOnlyGroup && metrics[m.key] !== undefined && metrics[m.key] !== def.notDefined;
+                const winner = context?.provenance[m.key];
+                let ownNote: string | null = null;
+                if (ownSet && others.length > 0 && context && winner !== context.ownId) {
+                  ownNote = winner
+                    ? `Overridden by ${context.labelOf(winner)}.`
+                    : 'Conflicts with another layer.';
+                }
                 return (
                   <fieldset
                     key={m.key}
@@ -420,6 +603,21 @@ export function MetricPicker({
                         </label>
                       ))}
                     </div>
+                    {others.length > 0 && (
+                      <div className="cvss-context">
+                        {others.map((o) => (
+                          <span key={o.label} className="cvss-context-item" data-applied={o.applied || undefined}>
+                            {o.label}: {m.values.find((v) => v.code === o.value)?.name ?? o.value}
+                            {o.applied ? ' (applied)' : ' (not applied)'}
+                          </span>
+                        ))}
+                        {ownNote && (
+                          <span className="cvss-context-item" data-warning>
+                            {ownNote}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </fieldset>
                 );
               })}

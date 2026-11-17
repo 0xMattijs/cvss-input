@@ -1,4 +1,5 @@
-export { evaluate, detectVersion, serialize, tokenize } from './evaluate';
+export { evaluate, detectVersion, serialize, tokenize, scoreFor } from './evaluate';
+export { evaluateLayers, requirementsToMetrics, versionFamily } from './layers';
 export { VERSIONS, ALL_VERSIONS, GROUP_LABELS, getMetricDef } from './definitions';
 export { scoreV2, scoreV3, severityV2, severityV3 } from './score-classic';
 export { scoreV4, macroVector } from './score-v4';

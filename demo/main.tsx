@@ -4,6 +4,7 @@ import { CvssInput } from '../src';
 import type { VersionMode } from '../src';
 import '../src/react/styles.css';
 import './demo.css';
+import { LayeredExample } from './LayeredExample';
 
 const BASE = 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H';
 
@@ -52,6 +53,15 @@ function Demo() {
       <section>
         <h2>Temporal and environmental on a base vector</h2>
         <CvssInput value={overlay} onChange={setOverlay} baseVector={BASE} />
+      </section>
+
+      <section>
+        <h2>Vulnerabilities on assets (layers)</h2>
+        <p className="hint">
+          The base vector belongs to the vulnerability, exploit maturity to a threat feed, and
+          security requirements and modified metrics to the asset. See demo/LayeredExample.tsx.
+        </p>
+        <LayeredExample />
       </section>
     </main>
   );

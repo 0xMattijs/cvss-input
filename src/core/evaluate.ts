@@ -139,7 +139,7 @@ export function serialize(
   return parts.join('/');
 }
 
-function scoreFor(version: CvssVersion, metrics: Record<string, string>): CvssScores {
+export function scoreFor(version: CvssVersion, metrics: Record<string, string>): CvssScores {
   switch (version) {
     case '2.0':
       return scoreV2(metrics);

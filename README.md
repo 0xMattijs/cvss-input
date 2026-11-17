@@ -71,6 +71,108 @@ result.scores;      // { kind: 'classic', base: { score: 9.8, severity: 'Critica
 
 The React hook `useCvss(vector, options)` returns the same result, memoized.
 
+## Combine sources with layers
+
+Often the metrics come from different places: the base vector belongs to a vulnerability, exploit
+maturity to a threat feed, and security requirements to an asset. Store each part on its own record
+and combine them at scoring time.
+
+```ts
+import { evaluateLayers } from 'cvss-input/core';
+
+const vulnerability = { cvss: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' };
+const asset = {
+  name: 'Customer database',
+  requirements: { C: 'H', I: 'H', A: 'M' },                  // version-neutral
+  modified: { '3.x': 'MAV:A', '4.0': 'MAV:A' },              // per version family
+};
+
+const result = evaluateLayers(
+  vulnerability.cvss,
+  [
+    { id: 'feed', label: 'Threat feed', vector: 'E:H', groups: ['temporal', 'threat'] },
+    {
+      id: 'asset',
+      label: asset.name,
+      requirements: asset.requirements,
+      vector: asset.modified,
+      groups: ['environmental'],
+    },
+  ],
+  { conflict: 'error' },
+);
+
+result.combined;    // 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:H/CR:H/IR:H/AR:M/MAV:A'
+result.scores;      // environmental: { score: 8.8, severity: 'High' }
+result.provenance;  // { AV: 'base', …, E: 'feed', CR: 'asset', MAV: 'asset' }
+```
+
+Each layer has:
+
+- `id` and an optional `label`. The ID `base` is reserved for the base vector's own temporal and
+  environmental metrics, which act as the first layer.
+- `vector`: one string, or one string per version family (`'2.0'`, `'3.x'`, `'4.0'`). Modified base
+  metrics differ between versions, so an asset that meets vulnerabilities of several versions needs one
+  vector per family. If a layer has no vector for the base vector's family, you get a warning and only
+  its requirements apply.
+- `requirements`: `C`, `I`, and `A` set to `L`, `M`, `H`, or `X`. These become `CR`, `IR`, and `AR` in
+  every version.
+- `groups`: the metric groups the layer may set. Anything else is an error.
+
+### Conflicts
+
+When two layers set the same metric to different values, the `conflict` option decides:
+
+| Rule | Result |
+|---|---|
+| `'error'` (default) | A `METRIC_CONFLICT` error; no score. |
+| `'first'` | The earliest layer wins. The base vector counts as the first layer. |
+| `'last'` | The latest layer wins. |
+| A function | `(metric, candidates) => value` picks one of the candidates' values. |
+
+"Not defined" values (`X`, `ND`) never count as set, so they don't conflict. Resolved conflicts are
+listed in `result.overrides`.
+
+```ts
+// Pessimistic rule: take the most mature exploit claim; otherwise the later layer wins.
+const rank = ['U', 'POC', 'P', 'F', 'H', 'A'];
+const conflict = (metric, candidates) =>
+  metric === 'E'
+    ? [...candidates].sort((a, b) => rank.indexOf(b.value) - rank.indexOf(a.value))[0].value
+    : candidates.at(-1).value;
+```
+
+### Components
+
+Edit one layer while the others apply as context. The picker shows the edited layer's groups only, and
+notes under each metric what the other layers set and which value wins:
+
+```tsx
+<CvssInput
+  baseVector={vulnerability.cvss}
+  layers={[assetLayer]}
+  layerId="feed"            // the input edits this layer
+  value={feedVector}
+  onChange={(vector, own, combined) => saveFeed(vector)}
+  conflict="last"
+/>
+```
+
+Without `baseVector`, the input edits the base vector and `layers` apply on top of it.
+
+Show the combined score for one vulnerability and asset pair, with a table of where each metric came
+from:
+
+```tsx
+<CvssCombined baseVector={vulnerability.cvss} layers={[feedLayer, assetLayer]} conflict="last" />
+```
+
+`useCvssLayers(baseVector, layers, options)` returns the same result as `evaluateLayers`, memoized.
+
+For a complete example with three vulnerabilities (CVSS 2.0, 3.1, and 4.0), three assets, a threat feed,
+a conflict rule switch, and a vulnerability × asset score matrix, see
+[`demo/LayeredExample.tsx`](demo/LayeredExample.tsx) and run `npm run dev`.
+
 ## Validation rules
 
 | Situation | Lenient (default) | Strict |

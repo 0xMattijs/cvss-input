@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CvssInput } from '../src';
+import { CvssCombined, CvssInput } from '../src';
+import type { CvssLayer } from '../src';
 
 afterEach(cleanup);
 
@@ -34,7 +35,7 @@ describe('CvssInput', () => {
     fireEvent.click(within(metricGroup('Report Confidence')).getByLabelText('Confirmed'));
     fireEvent.click(within(metricGroup('Exploit Code Maturity')).getByLabelText('Functional'));
     expect(textbox().value).toBe(V31 + '/E:F/RC:C');
-    expect(onChange).toHaveBeenLastCalledWith(V31 + '/E:F/RC:C', expect.objectContaining({ valid: true }));
+    expect(onChange).toHaveBeenLastCalledWith(V31 + '/E:F/RC:C', expect.objectContaining({ valid: true }), null);
   });
 
   it('removes a metric when you pick Not Defined', () => {
@@ -83,7 +84,7 @@ describe('CvssInput', () => {
     const onChange = vi.fn();
     const { rerender } = render(<CvssInput value={V31} onChange={onChange} />);
     fireEvent.change(textbox(), { target: { value: V31 + '/E:U' } });
-    expect(onChange).toHaveBeenCalledWith(V31 + '/E:U', expect.anything());
+    expect(onChange).toHaveBeenCalledWith(V31 + '/E:U', expect.anything(), null);
     expect(textbox().value).toBe(V31); // parent didn't update value
     rerender(<CvssInput value={V31 + '/E:U'} onChange={onChange} />);
     expect(within(scoreCell('Temporal')).getByText('9.0')).toBeTruthy(); // 9.8 × 0.91 = 8.92 → 9.0
@@ -100,6 +101,7 @@ describe('CvssInput', () => {
       expect(textbox().value).toBe('E:P');
       expect(onChange).toHaveBeenLastCalledWith(
         'E:P',
+        expect.objectContaining({ combined: V31 + '/E:P', valid: true }),
         expect.objectContaining({ combined: V31 + '/E:P', valid: true }),
       );
       expect(within(scoreCell('Temporal')).getByText('9.3')).toBeTruthy(); // 9.8 × 0.94 = 9.21 → 9.3
@@ -124,5 +126,75 @@ describe('CvssInput', () => {
   it('renders only the picker in picker mode', () => {
     render(<CvssInput defaultValue={V31} mode="picker" />);
     expect(screen.queryByRole('textbox')).toBeNull();
+  });
+});
+
+describe('layers', () => {
+  const asset: CvssLayer = {
+    id: 'asset',
+    label: 'Database server',
+    requirements: { C: 'H', I: 'H', A: 'L' },
+    vector: { '3.x': 'MAV:L' },
+    groups: ['environmental'],
+  };
+
+  it('edits a threat layer with the asset layer as context', () => {
+    const onChange = vi.fn();
+    render(<CvssInput baseVector={V31} layers={[asset]} layerId="feed" onChange={onChange} />);
+    expect(screen.getByText('Database server', { selector: '.cvss-layer-chip' })).toBeTruthy();
+    // The asset's MAV:L already lowers the environmental score.
+    expect(within(scoreCell('Environmental')).getByText('8.4')).toBeTruthy();
+    fireEvent.click(within(metricGroup('Exploit Code Maturity')).getByLabelText('Unproven'));
+    expect(textbox().value).toBe('E:U');
+    const layered = onChange.mock.calls.at(-1)![2];
+    expect(layered.combined).toBe(V31 + '/E:U/CR:H/IR:H/AR:L/MAV:L');
+    expect(layered.provenance).toMatchObject({ E: 'feed', CR: 'asset' });
+  });
+
+  it('shows what other layers set for a metric', () => {
+    render(<CvssInput baseVector={V31} layers={[asset]} layerId="feed" />);
+    // CR and IR are both High.
+    expect(screen.getAllByText('Database server: High (applied)')).toHaveLength(2);
+    expect(screen.getByText('Database server: Low (applied)')).toBeTruthy();
+  });
+
+  it('limits the picker to the edited layer\'s groups', () => {
+    render(<CvssInput baseVector={V31} layers={[{ ...asset, vector: undefined }]} layerId="asset" defaultValue="MAV:L" />);
+    expect(screen.queryByRole('group', { name: /^Exploit Code Maturity/ })).toBeNull();
+    expect(metricGroup('Modified Attack Vector')).toBeTruthy();
+    expect(textbox().value).toBe('MAV:L');
+  });
+
+  it('reports a conflict with the default rule and resolves it with "last"', () => {
+    const feed: CvssLayer = { id: 'feed', label: 'Threat feed', vector: 'E:H' };
+    const { rerender } = render(<CvssInput baseVector={V31} layers={[feed]} defaultValue="E:U" />);
+    expect(screen.getByText(/E is set to different values/)).toBeTruthy();
+    expect(screen.getByText('Conflicts with another layer.')).toBeTruthy();
+    rerender(<CvssInput baseVector={V31} layers={[feed]} defaultValue="E:U" conflict="last" />);
+    expect(within(scoreCell('Temporal')).getByText('9.0')).toBeTruthy();
+    rerender(<CvssInput baseVector={V31} layers={[feed]} defaultValue="E:U" conflict="first" />);
+    expect(screen.getByText('Overridden by Threat feed.')).toBeTruthy();
+  });
+
+  it('edits the base vector with layers applied on top', () => {
+    render(<CvssInput defaultValue={V31} layers={[asset]} />);
+    expect(within(scoreCell('Base')).getByText('9.8')).toBeTruthy();
+    expect(within(scoreCell('Environmental')).getByText('8.4')).toBeTruthy();
+    expect(screen.getByText(V31 + '/CR:H/IR:H/AR:L/MAV:L')).toBeTruthy();
+  });
+
+  it('shows the combined score and metric sources', () => {
+    render(
+      <CvssCombined
+        baseVector={V31 + '/E:U'}
+        layers={[{ id: 'feed', label: 'Threat feed', vector: 'E:H' }, asset]}
+        conflict="last"
+      />,
+    );
+    const table = screen.getByRole('table', { name: 'Metric sources' });
+    const row = within(table).getByText('Exploit Code Maturity').closest('tr')!;
+    expect(within(row).getByText('Threat feed')).toBeTruthy();
+    expect(row.querySelector('del')?.textContent).toBe('Base vector: U');
+    expect(within(table).getByText('Modified Attack Vector').closest('tr')!.textContent).toContain('Database server');
   });
 });
