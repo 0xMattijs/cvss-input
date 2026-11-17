@@ -71,7 +71,10 @@ result.scores;      // { kind: 'classic', base: { score: 9.8, severity: 'Critica
 - `version`: the version used for validation and scoring, and `detectedVersion`: what the input itself says.
 - `issues`: errors and warnings with a `code`, a `message`, and, where it applies, `metric` and the `start`/`end` character range in the input.
 - `normalized`: the input in canonical form; `combined`: base vector plus overlay.
-- `scores`: `null` when the vector has errors.
+- `scores`: `null` when the vector has errors. `scores.overall` is the final score: for 2.0 and 3.x,
+  Environmental if any environmental metric is set, otherwise Temporal if any temporal metric is set,
+  otherwise Base; for 4.0, the single score. `overall.group` says which one it is, and the component
+  labels that cell "Final".
 
 The React hook `useCvss(vector, options)` returns the same result, memoized.
 

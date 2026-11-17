@@ -70,7 +70,7 @@ describe('screen reader support', () => {
       fireEvent.change(input, { target: { value: V31 } });
       expect(status.textContent).toBe('');
       await act(() => vi.advanceTimersByTimeAsync(800));
-      expect(status.textContent).toBe('Base 9.8 Critical.');
+      expect(status.textContent).toBe('Final 9.8 Critical (Base).');
       fireEvent.change(input, { target: { value: V31 + '/E:Q' } });
       await act(() => vi.advanceTimersByTimeAsync(800));
       expect(status.textContent).toMatch(/^1 problem\. "Q" isn't a valid value for E/);
@@ -83,7 +83,7 @@ describe('screen reader support', () => {
     const scores = (v: string) => evaluate(v).scores;
     // Environmental: 6.42 × 0.8606 + 3.887 = 9.41 → 9.5; 9.5 × 0.94 = 8.93 → 9.0
     expect(statusMessage(scores(V31 + '/E:P/CR:L'), [])).toBe(
-      'Base 9.8 Critical, Temporal 9.3 Critical, Environmental 9.0 Critical.',
+      'Final 9.0 Critical (Environmental). Base 9.8 Critical, Temporal 9.3 Critical, Environmental 9.0 Critical.',
     );
     expect(statusMessage(scores(V40), [])).toBe('CVSS-B 9.3 Critical.');
   });

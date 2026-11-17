@@ -213,10 +213,13 @@ export function scoreV4(m: Metrics): V4Scores {
     : env
       ? 'CVSS-BE'
       : 'CVSS-B';
+  const value = { score, severity: severityV3(score) };
+  const group = env ? 'environmental' : threat ? 'threat' : 'base';
   return {
     kind: 'v4',
     version: '4.0',
-    score: { score, severity: severityV3(score) },
+    overall: { ...value, group },
+    score: value,
     nomenclature,
     macroVector: mv,
   };

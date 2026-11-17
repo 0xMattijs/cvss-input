@@ -23,6 +23,22 @@ describe('CvssInput', () => {
     expect(screen.getByText('detected')).toBeTruthy();
   });
 
+  it('marks the cell with the final score', () => {
+    const { rerender } = render(<CvssInput value={V31} onChange={() => {}} />);
+    const finalCell = () => document.querySelector('.cvss-score[data-final]')!;
+    expect(finalCell().textContent).toMatch(/^BaseFinal/);
+    rerender(<CvssInput value={V31 + '/E:U'} onChange={() => {}} />);
+    expect(finalCell().textContent).toMatch(/^TemporalFinal/);
+    rerender(<CvssInput value={V31 + '/MAV:L'} onChange={() => {}} />);
+    expect(finalCell().textContent).toMatch(/^EnvironmentalFinal8\.4/);
+    expect(document.querySelectorAll('.cvss-final-badge')).toHaveLength(1);
+  });
+
+  it("doesn't add a Final label to the single 4.0 score", () => {
+    render(<CvssInput defaultValue={V40} />);
+    expect(document.querySelector('.cvss-final-badge')).toBeNull();
+  });
+
   it('shows one labeled score for a 4.0 vector', () => {
     render(<CvssInput defaultValue={V40 + '/E:P'} />);
     expect(within(scoreCell('CVSS-BT')).getByText('8.9')).toBeTruthy();

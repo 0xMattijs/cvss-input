@@ -82,6 +82,42 @@ describe('known scores', () => {
   });
 });
 
+describe('final score', () => {
+  const V31 = 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H';
+  const V40 = 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N';
+  const overall = (v: string, o = {}) => evaluate(v, o).scores!.overall;
+
+  it.each([
+    [V31, { score: 9.8, severity: 'Critical', group: 'base' }],
+    [V31 + '/E:X/CR:X', { score: 9.8, severity: 'Critical', group: 'base' }],
+    [V31 + '/E:U', { score: 9.0, severity: 'Critical', group: 'temporal' }],
+    // Environmental wins even when no temporal metric is set.
+    [V31 + '/MAV:L', { score: 8.4, severity: 'High', group: 'environmental' }],
+    [V31 + '/E:U/MAV:L', { score: 7.7, severity: 'High', group: 'environmental' }],
+    // 7.5 × 0.95 = 7.125 → 7.1
+    ['AV:N/AC:L/Au:N/C:P/I:P/A:P/E:F', { score: 7.1, severity: 'High', group: 'temporal' }],
+    ['AV:N/AC:L/Au:N/C:P/I:P/A:P/E:F/CDP:H', { group: 'environmental' }],
+  ])('%s → %o', (vector, expected) => {
+    expect(overall(vector)).toMatchObject(expected);
+  });
+
+  it('matches the group score it was taken from', () => {
+    const s = evaluate(V31 + '/E:U/MAV:L').scores as ClassicScores;
+    expect(s.overall.score).toBe(s.environmental.score);
+  });
+
+  it.each([
+    [V40, 'base'],
+    [V40 + '/E:P', 'threat'],
+    [V40 + '/CR:L', 'environmental'],
+    [V40 + '/E:P/CR:L', 'environmental'],
+    [V40 + '/S:P', 'base'],
+  ])('CVSS 4.0 %s → %s', (vector, group) => {
+    const s = evaluate(vector).scores as V4Scores;
+    expect(s.overall).toEqual({ ...s.score, group });
+  });
+});
+
 describe('version detection', () => {
   it.each([
     ['CVSS:3.1/AV:N', '3.1'],

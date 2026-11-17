@@ -258,9 +258,8 @@ export function LayeredExample() {
   );
 }
 
-/** The most specific score: Environmental for 2.0 and 3.x, the single score for 4.0. */
+/** The final score. */
 function headline(scores: ReturnType<typeof evaluateLayers>['scores']): string {
   if (!scores) return '—';
-  const s = scores.kind === 'v4' ? scores.score : scores.environmental;
-  return `${s.score.toFixed(1)} ${s.severity}`;
+  return `${scores.overall.score.toFixed(1)} ${scores.overall.severity}`;
 }

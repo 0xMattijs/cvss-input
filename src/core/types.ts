@@ -34,9 +34,21 @@ export interface ScoreValue {
   severity: Severity;
 }
 
+/**
+ * The final score: the most specific score the vector supports. For 2.0 and 3.x,
+ * Environmental if any environmental metric is set, otherwise Temporal if any
+ * temporal metric is set, otherwise Base. For 4.0, the single score; `group`
+ * follows its nomenclature (B → base, BT → threat, BE and BTE → environmental).
+ */
+export interface OverallScore extends ScoreValue {
+  group: 'base' | 'temporal' | 'threat' | 'environmental';
+}
+
 export interface ClassicScores {
   kind: 'classic';
   version: '2.0' | '3.0' | '3.1';
+  /** The final score. See `OverallScore`. */
+  overall: OverallScore;
   base: ScoreValue;
   temporal: ScoreValue;
   environmental: ScoreValue;
@@ -53,6 +65,8 @@ export type V4Nomenclature = 'CVSS-B' | 'CVSS-BT' | 'CVSS-BE' | 'CVSS-BTE';
 export interface V4Scores {
   kind: 'v4';
   version: '4.0';
+  /** The final score: the same value as `score`. See `OverallScore`. */
+  overall: OverallScore;
   score: ScoreValue;
   nomenclature: V4Nomenclature;
   macroVector: string;

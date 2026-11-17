@@ -445,22 +445,26 @@ export function ScorePanel({ scores }: { scores: CvssScores | null }) {
       </div>
     );
   }
+  const final = scores.overall.group;
   return (
     <div className="cvss-scores">
       <ScoreCell
         title="Base"
         value={scores.base}
+        final={final === 'base'}
         detail={`Impact ${scores.impact.toFixed(1)} · Exploitability ${scores.exploitability.toFixed(1)}`}
       />
       <ScoreCell
         title="Temporal"
         value={scores.temporal}
+        final={final === 'temporal'}
         muted={!scores.temporalDefined}
         detail={scores.temporalDefined ? undefined : 'No temporal metrics set'}
       />
       <ScoreCell
         title="Environmental"
         value={scores.environmental}
+        final={final === 'environmental'}
         muted={!scores.environmentalDefined}
         detail={scores.environmentalDefined ? undefined : 'No environmental metrics set'}
       />
@@ -473,15 +477,21 @@ function ScoreCell({
   value,
   detail,
   muted,
+  final,
 }: {
   title: string;
   value: ScoreValue | null;
   detail?: string;
   muted?: boolean;
+  /** Marks the cell holding the final score, when several scores are shown. */
+  final?: boolean;
 }) {
   return (
-    <div className="cvss-score" data-muted={muted || undefined}>
-      <div className="cvss-score-title">{title}</div>
+    <div className="cvss-score" data-muted={muted || undefined} data-final={final || undefined}>
+      <div className="cvss-score-title">
+        {title}
+        {final && <span className="cvss-final-badge">Final</span>}
+      </div>
       <div className="cvss-score-row">
         <span className="cvss-score-number">{value ? value.score.toFixed(1) : '—'}</span>
         {value && (
@@ -668,10 +678,12 @@ export function statusMessage(scores: CvssScores | null, issues: CvssIssue[]): s
   if (!scores) return '';
   const fmt = (v: ScoreValue) => `${v.score.toFixed(1)} ${v.severity}`;
   if (scores.kind === 'v4') return `${scores.nomenclature} ${fmt(scores.score)}.`;
+  const names = { base: 'Base', temporal: 'Temporal', threat: 'Threat', environmental: 'Environmental' };
   const parts = [`Base ${fmt(scores.base)}`];
   if (scores.temporalDefined) parts.push(`Temporal ${fmt(scores.temporal)}`);
   if (scores.environmentalDefined) parts.push(`Environmental ${fmt(scores.environmental)}`);
-  return parts.join(', ') + '.';
+  const final = `Final ${fmt(scores.overall)} (${names[scores.overall.group]}).`;
+  return parts.length === 1 ? final : `${final} ${parts.join(', ')}.`;
 }
 
 /**

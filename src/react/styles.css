@@ -221,6 +221,23 @@
   letter-spacing: 0.04em;
 }
 
+/* The cell holding the final score. */
+.cvss-score[data-final] {
+  border-color: var(--cvss-accent);
+  box-shadow: inset 0 0 0 1px var(--cvss-accent);
+}
+
+.cvss-final-badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--cvss-accent);
+  color: var(--cvss-accent-text);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+
 .cvss-score-row {
   display: flex;
   align-items: center;
@@ -522,5 +539,15 @@
 
   .cvss-severity {
     border-color: CanvasText;
+  }
+
+  .cvss-score[data-final] {
+    border: 2px solid Highlight;
+  }
+
+  .cvss-final-badge {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
   }
 }

@@ -1,4 +1,4 @@
-import type { ClassicScores, Severity } from './types';
+import type { ClassicScores, OverallScore, ScoreValue, Severity } from './types';
 
 type Metrics = Record<string, string>;
 
@@ -108,12 +108,16 @@ export function scoreV2(m: Metrics, method: V2Method = 'nvd'): ClassicScores {
     environmental = round1((adjustedTemporal + (10 - adjustedTemporal) * cdp) * td);
   }
 
+  const baseValue = { score: base, severity: severityV2(base) };
+  const temporalValue = { score: temporal, severity: severityV2(temporal) };
+  const environmentalValue = { score: environmental, severity: severityV2(environmental) };
   return {
     kind: 'classic',
     version: '2.0',
-    base: { score: base, severity: severityV2(base) },
-    temporal: { score: temporal, severity: severityV2(temporal) },
-    environmental: { score: environmental, severity: severityV2(environmental) },
+    overall: overallOf(baseValue, temporalValue, environmentalValue, temporalDefined, environmentalDefined),
+    base: baseValue,
+    temporal: temporalValue,
+    environmental: environmentalValue,
     temporalDefined,
     environmentalDefined,
     impact: round1(impact),
@@ -148,6 +152,19 @@ function roundup31(x: number): number {
 /** CVSS 3.0 Roundup: plain ceiling to one decimal. */
 function roundup30(x: number): number {
   return Math.ceil(x * 10) / 10;
+}
+
+/** Picks the most specific defined score: Environmental, then Temporal, then Base. */
+function overallOf(
+  base: ScoreValue,
+  temporal: ScoreValue,
+  environmental: ScoreValue,
+  temporalDefined: boolean,
+  environmentalDefined: boolean,
+): OverallScore {
+  if (environmentalDefined) return { ...environmental, group: 'environmental' };
+  if (temporalDefined) return { ...temporal, group: 'temporal' };
+  return { ...base, group: 'base' };
 }
 
 function isDefined(m: Metrics, keys: string[], notDefined: string): boolean {
@@ -211,18 +228,24 @@ export function scoreV3(m: Metrics, version: '3.0' | '3.1'): ClassicScores {
             temporalFactor,
         );
 
+  const temporalDefined = isDefined(m, ['E', 'RL', 'RC'], 'X');
+  const environmentalDefined = isDefined(
+    m,
+    ['CR', 'IR', 'AR', 'MAV', 'MAC', 'MPR', 'MUI', 'MS', 'MC', 'MI', 'MA'],
+    'X',
+  );
+  const baseValue = { score: base, severity: severityV3(base) };
+  const temporalValue = { score: temporal, severity: severityV3(temporal) };
+  const environmentalValue = { score: environmental, severity: severityV3(environmental) };
   return {
     kind: 'classic',
     version,
-    base: { score: base, severity: severityV3(base) },
-    temporal: { score: temporal, severity: severityV3(temporal) },
-    environmental: { score: environmental, severity: severityV3(environmental) },
-    temporalDefined: isDefined(m, ['E', 'RL', 'RC'], 'X'),
-    environmentalDefined: isDefined(
-      m,
-      ['CR', 'IR', 'AR', 'MAV', 'MAC', 'MPR', 'MUI', 'MS', 'MC', 'MI', 'MA'],
-      'X',
-    ),
+    overall: overallOf(baseValue, temporalValue, environmentalValue, temporalDefined, environmentalDefined),
+    base: baseValue,
+    temporal: temporalValue,
+    environmental: environmentalValue,
+    temporalDefined,
+    environmentalDefined,
     impact: round1(Math.max(0, impact)),
     exploitability: round1(exploitability),
   };
