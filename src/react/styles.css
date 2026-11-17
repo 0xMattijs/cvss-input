@@ -1,0 +1,418 @@
+/*
+ * cvss-input styles. Override any --cvss-* variable on .cvss or an ancestor to theme.
+ * Dark mode follows prefers-color-scheme unless [data-theme="light"] is set on an
+ * ancestor; [data-theme="dark"] forces it.
+ */
+.cvss {
+  --cvss-font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --cvss-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+  --cvss-bg: #ffffff;
+  --cvss-surface: #f6f7f9;
+  --cvss-border: #d6d9df;
+  --cvss-border-strong: #a9afba;
+  --cvss-text: #1b1f27;
+  --cvss-text-muted: #5d6573;
+  --cvss-accent: #2456c7;
+  --cvss-accent-text: #ffffff;
+  --cvss-focus: #2456c7;
+  --cvss-error: #b42318;
+  --cvss-error-bg: #fdf0ef;
+  --cvss-warning: #8a5a00;
+  --cvss-warning-bg: #fdf6e6;
+  --cvss-sev-none: #5d6573;
+  --cvss-sev-low: #2f7d32;
+  --cvss-sev-medium: #9a6700;
+  --cvss-sev-high: #c4410c;
+  --cvss-sev-critical: #a3122b;
+  --cvss-radius: 6px;
+
+  font-family: var(--cvss-font);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--cvss-text);
+  background: var(--cvss-bg);
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .cvss {
+    --cvss-bg: #15181d;
+    --cvss-surface: #1d2128;
+    --cvss-border: #343a45;
+    --cvss-border-strong: #4b5361;
+    --cvss-text: #e7e9ee;
+    --cvss-text-muted: #9aa2b1;
+    --cvss-accent: #7aa2ff;
+    --cvss-accent-text: #0d1220;
+    --cvss-focus: #7aa2ff;
+    --cvss-error: #ff8a80;
+    --cvss-error-bg: #3a1d1b;
+    --cvss-warning: #f2c46d;
+    --cvss-warning-bg: #352a14;
+    --cvss-sev-none: #9aa2b1;
+    --cvss-sev-low: #7bc47f;
+    --cvss-sev-medium: #f2c46d;
+    --cvss-sev-high: #ff9f6b;
+    --cvss-sev-critical: #ff7b8f;
+  }
+}
+
+:root[data-theme='dark'] .cvss {
+  --cvss-bg: #15181d;
+  --cvss-surface: #1d2128;
+  --cvss-border: #343a45;
+  --cvss-border-strong: #4b5361;
+  --cvss-text: #e7e9ee;
+  --cvss-text-muted: #9aa2b1;
+  --cvss-accent: #7aa2ff;
+  --cvss-accent-text: #0d1220;
+  --cvss-focus: #7aa2ff;
+  --cvss-error: #ff8a80;
+  --cvss-error-bg: #3a1d1b;
+  --cvss-warning: #f2c46d;
+  --cvss-warning-bg: #352a14;
+  --cvss-sev-none: #9aa2b1;
+  --cvss-sev-low: #7bc47f;
+  --cvss-sev-medium: #f2c46d;
+  --cvss-sev-high: #ff9f6b;
+  --cvss-sev-critical: #ff7b8f;
+}
+
+.cvss *,
+.cvss *::before,
+.cvss *::after {
+  box-sizing: border-box;
+}
+
+.cvss[data-disabled] {
+  opacity: 0.6;
+}
+
+/* Text field ------------------------------------------------------------- */
+
+.cvss-field {
+  display: grid;
+  gap: 4px;
+}
+
+.cvss-label {
+  font-weight: 600;
+}
+
+.cvss-text {
+  width: 100%;
+  font-family: var(--cvss-mono);
+  font-size: 13px;
+  padding: 8px 10px;
+  color: var(--cvss-text);
+  background: var(--cvss-bg);
+  border: 1px solid var(--cvss-border-strong);
+  border-radius: var(--cvss-radius);
+}
+
+.cvss-text:focus-visible {
+  outline: 2px solid var(--cvss-focus);
+  outline-offset: 1px;
+}
+
+.cvss-text[aria-invalid='true'] {
+  border-color: var(--cvss-error);
+}
+
+/* Version line and issues -------------------------------------------------- */
+
+.cvss-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  color: var(--cvss-text-muted);
+  font-size: 13px;
+}
+
+.cvss-version {
+  font-weight: 600;
+  color: var(--cvss-text);
+}
+
+.cvss-version[data-empty] {
+  color: var(--cvss-text-muted);
+  font-weight: 400;
+}
+
+.cvss-base-vector {
+  font-family: var(--cvss-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.cvss-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.cvss-issues:empty {
+  display: none;
+}
+
+.cvss-issue {
+  display: flex;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--cvss-radius);
+  font-size: 13px;
+}
+
+.cvss-issue[data-severity='error'] {
+  color: var(--cvss-error);
+  background: var(--cvss-error-bg);
+}
+
+.cvss-issue[data-severity='warning'] {
+  color: var(--cvss-warning);
+  background: var(--cvss-warning-bg);
+}
+
+.cvss-issue-kind {
+  font-weight: 600;
+  flex: none;
+}
+
+.cvss-issue-pos {
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* Scores ------------------------------------------------------------------- */
+
+.cvss-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.cvss-score {
+  padding: 10px 12px;
+  background: var(--cvss-surface);
+  border: 1px solid var(--cvss-border);
+  border-radius: var(--cvss-radius);
+  min-width: 0;
+}
+
+.cvss-score[data-muted] .cvss-score-row {
+  opacity: 0.55;
+}
+
+.cvss-score-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cvss-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cvss-score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.cvss-score-number {
+  font-size: 26px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.cvss-severity {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.cvss-severity[data-severity='none'] { color: var(--cvss-sev-none); }
+.cvss-severity[data-severity='low'] { color: var(--cvss-sev-low); }
+.cvss-severity[data-severity='medium'] { color: var(--cvss-sev-medium); }
+.cvss-severity[data-severity='high'] { color: var(--cvss-sev-high); }
+.cvss-severity[data-severity='critical'] { color: var(--cvss-sev-critical); }
+
+.cvss-score-detail {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--cvss-text-muted);
+}
+
+/* Picker ------------------------------------------------------------------- */
+
+.cvss-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.cvss-picker-note {
+  margin: 0;
+  color: var(--cvss-text-muted);
+  font-size: 13px;
+}
+
+.cvss-picker-version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cvss-picker-version label {
+  font-weight: 600;
+}
+
+.cvss-picker-version select {
+  font: inherit;
+  color: var(--cvss-text);
+  background: var(--cvss-bg);
+  border: 1px solid var(--cvss-border-strong);
+  border-radius: var(--cvss-radius);
+  padding: 4px 8px;
+}
+
+.cvss-group {
+  border: 1px solid var(--cvss-border);
+  border-radius: var(--cvss-radius);
+  background: var(--cvss-bg);
+}
+
+.cvss-group > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-weight: 600;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.cvss-group > summary:focus-visible {
+  outline: 2px solid var(--cvss-focus);
+  outline-offset: -2px;
+}
+
+.cvss-group-note {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--cvss-text-muted);
+}
+
+.cvss-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px 16px;
+  padding: 4px 12px 12px;
+}
+
+.cvss-metric {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.cvss-metric legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.cvss-metric-key {
+  font-family: var(--cvss-mono);
+  font-size: 11px;
+  color: var(--cvss-text-muted);
+  text-decoration: none;
+}
+
+.cvss-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cvss-option {
+  position: relative;
+  display: inline-flex;
+}
+
+.cvss-option input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cvss-option span {
+  padding: 3px 9px;
+  font-size: 12.5px;
+  border: 1px solid var(--cvss-border-strong);
+  border-radius: var(--cvss-radius);
+  background: var(--cvss-bg);
+  white-space: nowrap;
+}
+
+.cvss-option input:hover + span {
+  border-color: var(--cvss-accent);
+}
+
+.cvss-option input:checked + span {
+  background: var(--cvss-accent);
+  border-color: var(--cvss-accent);
+  color: var(--cvss-accent-text);
+}
+
+.cvss-option input:focus-visible + span {
+  outline: 2px solid var(--cvss-focus);
+  outline-offset: 1px;
+}
+
+.cvss-metric:disabled .cvss-option span {
+  opacity: 0.6;
+}
+
+.cvss-metric:disabled .cvss-option input:checked + span {
+  opacity: 0.85;
+}
+
+.cvss-metric:disabled .cvss-option input {
+  cursor: default;
+}
+
+/* Quick fixes ---------------------------------------------------------------- */
+
+.cvss-fixes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cvss-fix {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  color: var(--cvss-accent);
+  background: var(--cvss-bg);
+  border: 1px solid var(--cvss-accent);
+  border-radius: var(--cvss-radius);
+  cursor: pointer;
+}
+
+.cvss-fix:hover {
+  background: var(--cvss-surface);
+}
+
+.cvss-fix:focus-visible {
+  outline: 2px solid var(--cvss-focus);
+  outline-offset: 1px;
+}
