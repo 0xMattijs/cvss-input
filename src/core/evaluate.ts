@@ -1,4 +1,5 @@
 import { VERSIONS, getMetricDef } from './definitions';
+import { makeIssue } from './messages';
 import { scoreV2, scoreV3 } from './score-classic';
 import { scoreV4 } from './score-v4';
 import type {
@@ -164,16 +165,17 @@ export const DEFAULT_MAX_LENGTH = 1024;
 /** Maximum number of issues reported per vector; the rest are summarized in one issue. */
 export const MAX_ISSUES = 20;
 
+/** The character range of a segment, for an issue. */
+const at = (seg: { start: number; end: number }) => ({ start: seg.start, end: seg.end });
+
 /** Keeps the first MAX_ISSUES issues and replaces the rest with one summary issue. */
 function capIssues(issues: CvssIssue[]): CvssIssue[] {
   if (issues.length <= MAX_ISSUES) return issues;
   const kept = issues.slice(0, MAX_ISSUES);
   const dropped = issues.slice(MAX_ISSUES);
-  kept.push({
-    severity: dropped.some(isErr) ? 'error' : 'warning',
-    code: 'TOO_MANY_ISSUES',
-    message: `…and ${dropped.length} more ${dropped.length === 1 ? 'problem' : 'problems'}.`,
-  });
+  kept.push(
+    makeIssue('TOO_MANY_ISSUES', { count: dropped.length }, { severity: dropped.some(isErr) ? 'error' : 'warning' }),
+  );
   return kept;
 }
 
@@ -206,11 +208,7 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
 
   // Reject oversized input before parsing, so it can't produce unbounded work or issues.
   if (input.length > maxLength) {
-    issues.push({
-      severity: 'error',
-      code: 'TOO_LONG',
-      message: `The vector is ${input.length} characters long; the maximum is ${maxLength}.`,
-    });
+    issues.push(makeIssue('TOO_LONG', { length: input.length, max: maxLength }, { severity: 'error' }));
     return result({});
   }
 
@@ -219,11 +217,7 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
   if (overlay) {
     base = evaluate(baseVector, { version: mode, strict, maxLength, v2Method });
     if (!base.valid || !base.version) {
-      issues.push({
-        severity: 'error',
-        code: 'INVALID_BASE_VECTOR',
-        message: `The base vector is invalid: ${base.issues.filter(isErr).map((i) => i.message).join(' ') || 'unknown version.'}`,
-      });
+      issues.push(makeIssue('INVALID_BASE_VECTOR', { issues: base.issues.filter(isErr) }, { severity: 'error' }));
       return result({});
     }
   }
@@ -243,27 +237,27 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
         scores: base.scores,
       });
     }
-    issues.push({ severity: 'error', code: 'EMPTY', message: 'Enter a CVSS vector.' });
+    issues.push(makeIssue('EMPTY', {}, { severity: 'error' }));
     return result({ detectedVersion: t.prefixVersion });
   }
 
   if (t.unknownPrefix) {
-    issues.push({
-      severity: 'error',
-      code: 'UNKNOWN_PREFIX',
-      message: `"${t.unknownPrefix.text}" isn't a supported CVSS version.`,
-      start: t.unknownPrefix.start,
-      end: t.unknownPrefix.end,
-    });
+    issues.push(
+      makeIssue(
+        'UNKNOWN_PREFIX',
+        { text: t.unknownPrefix.text },
+        { severity: 'error', start: t.unknownPrefix.start, end: t.unknownPrefix.end },
+      ),
+    );
   }
   if (t.nonstandardPrefix) {
-    issues.push({
-      severity: 'warning',
-      code: 'NONSTANDARD_PREFIX',
-      message: 'CVSS 2.0 vectors have no prefix. The prefix is removed on normalization.',
-      start: t.nonstandardPrefix.start,
-      end: t.nonstandardPrefix.end,
-    });
+    issues.push(
+      makeIssue('NONSTANDARD_PREFIX', {}, {
+        severity: 'warning',
+        start: t.nonstandardPrefix.start,
+        end: t.nonstandardPrefix.end,
+      }),
+    );
   }
 
   // --- Determine the version ----------------------------------------------
@@ -275,54 +269,33 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
   if (base?.version) {
     version = base.version;
     if (t.prefixVersion && t.prefixVersion !== version) {
-      issues.push({
-        severity: 'error',
-        code: 'VERSION_MISMATCH',
-        message: `The vector is CVSS ${t.prefixVersion}, but the base vector is CVSS ${version}.`,
-      });
+      issues.push(
+        makeIssue('VERSION_MISMATCH', { found: t.prefixVersion, expected: version, source: 'base' }, { severity: 'error' }),
+      );
     }
   } else if (mode !== 'auto') {
     version = mode;
     if (t.prefixVersion && t.prefixVersion !== mode) {
-      issues.push({
-        severity: 'error',
-        code: 'VERSION_MISMATCH',
-        message: `The vector is CVSS ${t.prefixVersion}, but CVSS ${mode} is required.`,
-      });
+      issues.push(
+        makeIssue('VERSION_MISMATCH', { found: t.prefixVersion, expected: mode, source: 'forced' }, { severity: 'error' }),
+      );
     } else if (!t.prefixVersion && VERSIONS[mode].prefix) {
-      issues.push({
-        severity: strict ? 'error' : 'warning',
-        code: 'MISSING_PREFIX',
-        message: `The vector has no "${VERSIONS[mode].prefix}/" prefix.${strict ? '' : ' It is added on normalization.'}`,
-      });
+      issues.push(
+        makeIssue('MISSING_PREFIX', { prefix: VERSIONS[mode].prefix!, strict }, { severity: strict ? 'error' : 'warning' }),
+      );
     }
   } else if (t.prefixVersion) {
     version = t.prefixVersion;
   } else if (keyGuess === '3.x') {
-    issues.push({
-      severity: 'error',
-      code: 'AMBIGUOUS_VERSION',
-      message:
-        'This looks like a CVSS 3.x vector without a prefix. Add "CVSS:3.0/" or "CVSS:3.1/", or set the version.',
-    });
+    issues.push(makeIssue('AMBIGUOUS_VERSION', {}, { severity: 'error' }));
   } else if (keyGuess) {
     version = keyGuess;
   } else if (!t.unknownPrefix) {
-    issues.push({
-      severity: 'error',
-      code: 'UNDETECTABLE_VERSION',
-      message: "Can't determine the CVSS version. Add a prefix such as \"CVSS:3.1/\", or set the version.",
-    });
+    issues.push(makeIssue('UNDETECTABLE_VERSION', {}, { severity: 'error' }));
   }
 
   for (const m of t.malformed) {
-    issues.push({
-      severity: 'error',
-      code: 'MALFORMED_SEGMENT',
-      message: m.raw === '' ? 'The vector has an empty segment ("//").' : `"${m.raw}" isn't a "metric:value" pair.`,
-      start: m.start,
-      end: m.end,
-    });
+    issues.push(makeIssue('MALFORMED_SEGMENT', { raw: m.raw }, { severity: 'error', start: m.start, end: m.end }));
   }
 
   if (!version) {
@@ -339,47 +312,25 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
   for (const seg of t.segments) {
     const mdef = getMetricDef(version, seg.key);
     if (!mdef) {
-      issues.push({
-        severity: 'error',
-        code: 'UNKNOWN_METRIC',
-        metric: seg.key,
-        message: `"${seg.key}" isn't a CVSS ${version} metric.`,
-        start: seg.start,
-        end: seg.end,
-      });
+      issues.push(makeIssue('UNKNOWN_METRIC', { key: seg.key, version }, { severity: 'error', metric: seg.key, ...at(seg) }));
       continue;
     }
     if (overlay && mdef.group === 'base') {
-      issues.push({
-        severity: 'error',
-        code: 'BASE_METRIC_IN_OVERLAY',
-        metric: seg.key,
-        message: `"${seg.key}" is a base metric. Base metrics come from the base vector.`,
-        start: seg.start,
-        end: seg.end,
-      });
+      issues.push(makeIssue('BASE_METRIC_IN_OVERLAY', { key: seg.key }, { severity: 'error', metric: seg.key, ...at(seg) }));
       continue;
     }
     if (!mdef.values.some((v) => v.code === seg.value)) {
-      issues.push({
-        severity: 'error',
-        code: 'INVALID_VALUE',
-        metric: seg.key,
-        message: `"${seg.value}" isn't a valid value for ${seg.key} (${mdef.name}). Valid values: ${mdef.values.map((v) => v.code).join(', ')}.`,
-        start: seg.start,
-        end: seg.end,
-      });
+      issues.push(
+        makeIssue(
+          'INVALID_VALUE',
+          { key: seg.key, value: seg.value, version, valid: mdef.values.map((v) => v.code) },
+          { severity: 'error', metric: seg.key, ...at(seg) },
+        ),
+      );
       continue;
     }
     if (seg.key in metrics) {
-      issues.push({
-        severity: 'error',
-        code: 'DUPLICATE_METRIC',
-        metric: seg.key,
-        message: `${seg.key} appears more than once.`,
-        start: seg.start,
-        end: seg.end,
-      });
+      issues.push(makeIssue('DUPLICATE_METRIC', { key: seg.key }, { severity: 'error', metric: seg.key, ...at(seg) }));
       continue;
     }
     metrics[seg.key] = seg.value;
@@ -391,23 +342,12 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
   if (!overlay) {
     const missing = def.metrics.filter((m) => m.required && !(m.key in metrics));
     for (const m of missing) {
-      issues.push({
-        severity: 'error',
-        code: 'MISSING_METRIC',
-        metric: m.key,
-        message: `${m.key} (${m.name}) is missing.`,
-      });
+      issues.push(makeIssue('MISSING_METRIC', { key: m.key, version }, { severity: 'error', metric: m.key }));
     }
   }
 
   if (outOfOrder) {
-    issues.push({
-      severity: strict ? 'error' : 'warning',
-      code: 'METRIC_ORDER',
-      message: strict
-        ? `Metrics aren't in the order the CVSS ${version} specification defines.`
-        : `Metrics aren't in canonical order. They're reordered on normalization.`,
-    });
+    issues.push(makeIssue('METRIC_ORDER', { strict, version }, { severity: strict ? 'error' : 'warning' }));
   }
 
   const effectiveMetrics = base ? { ...base.metrics, ...metrics } : metrics;

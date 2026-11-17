@@ -51,6 +51,7 @@ import 'cvss-input/styles.css';
 | `mode` | `'both'` | `'text'`, `'picker'`, or `'both'`. |
 | `defaultPickerVersion` | `'4.0'` | Version the picker starts with for an empty vector in auto mode. |
 | `valueOrder` | `'first'` | Order of each metric's values in the picker. See [Value order](#value-order). |
+| `messages` | English | Texts in another language, such as `nl`. See [Languages](#languages). |
 | `readOnly`, `disabled`, `label`, `className` | | Standard. |
 
 `ScorePanel` and `MetricPicker` are exported separately if you want to compose your own layout.
@@ -84,7 +85,9 @@ result.scores;      // { kind: 'classic', base: { score: 9.8, severity: 'Critica
 `evaluate(input, { version, strict, baseVector, maxLength, v2Method })` returns:
 
 - `version`: the version used for validation and scoring, and `detectedVersion`: what the input itself says.
-- `issues`: errors and warnings with a `code`, a `message`, and, where it applies, `metric` and the `start`/`end` character range in the input.
+- `issues`: errors and warnings with a `code`, an English `message`, the `params` the message is built
+  from, and, where it applies, `metric` and the `start`/`end` character range in the input.
+  `formatIssue(issue, nl)` returns the message in another language.
 - `normalized`: the input in canonical form; `combined`: base vector plus overlay.
 - `scores`: `null` when the vector has errors. `scores.overall` is the final score: for 2.0 and 3.x,
   Environmental if any environmental metric is set, otherwise Temporal if any temporal metric is set,
@@ -194,6 +197,44 @@ from:
 For a complete example with three vulnerabilities (CVSS 2.0, 3.1, and 4.0), three assets, a threat feed,
 a conflict rule switch, and a vulnerability × asset score matrix, see
 [`demo/LayeredExample.tsx`](demo/LayeredExample.tsx) and run `npm run dev`.
+
+## Languages
+
+The components ship in English (`en`, the default) and Dutch (`nl`). Set the language for a whole app
+with a provider, or for one component with the `messages` prop:
+
+```tsx
+import { CvssInput, CvssMessagesProvider, nl } from 'cvss-input';
+
+<CvssMessagesProvider messages={nl}>
+  <App />
+</CvssMessagesProvider>
+
+<CvssInput value={vector} onChange={setVector} messages={nl} />
+```
+
+A catalog covers every text: labels and buttons, issue messages, severities, the screen reader
+summary, and the names of metrics and values, such as "Aanvalsvector" and "Netwerk". Vector codes such
+as `AV:N` stay as they are. Scores follow the language's number format: 9.8 in English, 9,8 in Dutch.
+The components set the `lang` attribute, so screen readers pronounce the text in the right language.
+
+To add a language, write a `CvssMessages` object; `src/core/locales/nl.ts` shows a complete one, and
+TypeScript reports anything it leaves out. To change a few texts, pass a partial catalog. Anything it
+leaves out comes from the provider, or from English:
+
+```tsx
+<CvssInput messages={{ ui: { vectorLabel: 'Vulnerability vector' } }} />
+```
+
+Issue messages are functions of the issue's `params`, so a translation can order the sentence its own
+way and use translated metric names:
+
+```ts
+INVALID_VALUE: (p, f) => `"${p.value}" is geen geldige waarde voor ${p.key} (${f.metric(p.version, p.key)}).`,
+```
+
+The core keeps `issue.message` in English, for logs and APIs. `formatIssue(issue, messages)` formats an
+issue in any language, and `statusMessage(scores, issues, messages)` builds the screen reader summary.
 
 ## Validation rules
 

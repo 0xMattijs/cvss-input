@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import axe from 'axe-core';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CvssCombined, CvssInput, evaluate } from '../src';
+import { CvssCombined, CvssInput, evaluate, nl } from '../src';
 import { statusMessage } from '../src/react/CvssInput';
 import type { CvssLayer } from '../src';
 
@@ -52,6 +52,11 @@ describe('axe', () => {
     )],
     ['combined', <CvssCombined baseVector={V31 + '/E:U'} layers={[{ id: 'feed', vector: 'E:H' }, asset]} conflict="last" />],
     ['combined with conflict', <CvssCombined baseVector={V31 + '/E:U'} layers={[{ id: 'feed', vector: 'E:H' }]} />],
+    ['Dutch', <CvssInput defaultValue="CVSS:3.1/AV:Q/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" messages={nl} />],
+    [
+      'Dutch combined',
+      <CvssCombined baseVector={V31 + '/E:U'} layers={[{ id: 'feed', vector: 'E:H' }, asset]} conflict="last" messages={nl} />,
+    ],
   ];
 
   it.each(cases)('%s has no violations', async (_, ui) => {

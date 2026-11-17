@@ -3,5 +3,8 @@ export { evaluateLayers, requirementsToMetrics, versionFamily } from './layers';
 export { VERSIONS, ALL_VERSIONS, GROUP_LABELS, getMetricDef, orderedValues } from './definitions';
 export { scoreV2, scoreV3, severityV2, severityV3 } from './score-classic';
 export { scoreV4, macroVector } from './score-v4';
+export { en, formatIssue, messageFormat, resolveMessages } from './messages';
+export type { CvssMessages, CvssMessagesInput, MessageFormat, MetricNames } from './messages';
+export { nl } from './locales/nl';
 export type * from './types';
 export type { V2Method } from './score-classic';

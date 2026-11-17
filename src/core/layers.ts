@@ -1,5 +1,6 @@
 import { VERSIONS, getMetricDef } from './definitions';
 import { evaluate, scoreFor, serialize } from './evaluate';
+import { en, makeIssue } from './messages';
 import type {
   CvssIssue,
   CvssLayer,
@@ -78,11 +79,7 @@ export function evaluateLayers(
   });
 
   if (!base.valid || !base.version || base.normalized === null) {
-    issues.push({
-      severity: 'error',
-      code: 'INVALID_BASE_VECTOR',
-      message: 'The base vector is invalid, so the layers can\'t be combined.',
-    });
+    issues.push(makeIssue('INVALID_BASE_VECTOR', { issues: null }, { severity: 'error' }));
     return empty(
       layers.map((l) => ({ id: l.id, label: l.label ?? l.id, vector: null, result: null, metrics: {}, issues: [] })),
     );
@@ -99,7 +96,7 @@ export function evaluateLayers(
   // The base vector's own temporal and environmental metrics form an implicit first layer.
   const baseLayer: LayerOutcome = {
     id: 'base',
-    label: 'Base vector',
+    label: en.ui.baseVector,
     vector: null,
     result: null,
     metrics: Object.fromEntries(
@@ -110,18 +107,24 @@ export function evaluateLayers(
     issues: [],
   };
 
+  // Display names of the given layers, for issue parameters. The base vector is named by the catalog.
+  const labels = (...ids: string[]) => {
+    const out: Record<string, string> = {};
+    for (const id of ids) {
+      const label = id === 'base' ? undefined : layers.find((l) => l.id === id)?.label;
+      if (label !== undefined) out[id] = label;
+    }
+    return Object.keys(out).length > 0 ? { labels: out } : {};
+  };
+
   const seen = new Set<string>(['base']);
   const outcomes: LayerOutcome[] = layers.map((layer) => {
     const label = layer.label ?? layer.id;
     const layerIssues: CvssIssue[] = [];
-    const add = (issue: Omit<CvssIssue, 'layer'>) => layerIssues.push({ ...issue, layer: layer.id });
+    const add = (issue: CvssIssue) => layerIssues.push({ ...issue, layer: layer.id });
 
     if (seen.has(layer.id)) {
-      add({
-        severity: 'error',
-        code: 'DUPLICATE_LAYER_ID',
-        message: layer.id === 'base' ? '"base" is reserved for the base vector.' : `Layer ID "${layer.id}" is used more than once.`,
-      });
+      add(makeIssue('DUPLICATE_LAYER_ID', { layer: layer.id, reserved: layer.id === 'base' }, { severity: 'error' }));
     }
     seen.add(layer.id);
 
@@ -131,11 +134,13 @@ export function evaluateLayers(
     let result = null;
 
     if (vector === null && layer.vector !== undefined) {
-      add({
-        severity: 'warning',
-        code: 'MISSING_LAYER_VECTOR',
-        message: `${label} has no CVSS ${versionFamily(version)} metrics${layer.requirements ? '; only its security requirements apply' : ''}.`,
-      });
+      add(
+        makeIssue(
+          'MISSING_LAYER_VECTOR',
+          { layer: layer.id, family: versionFamily(version), hasRequirements: !!layer.requirements, ...labels(layer.id) },
+          { severity: 'warning' },
+        ),
+      );
     }
 
     if (vector !== null && vector.trim() !== '') {
@@ -144,12 +149,13 @@ export function evaluateLayers(
       for (const [key, value] of Object.entries(result.metrics)) {
         const mdef = getMetricDef(version, key);
         if (!mdef || !allowed.includes(mdef.group)) {
-          add({
-            severity: 'error',
-            code: 'METRIC_NOT_ALLOWED_IN_LAYER',
-            metric: key,
-            message: `${label} may not set ${key}; it only accepts ${allowed.join(', ')} metrics.`,
-          });
+          add(
+            makeIssue(
+              'METRIC_NOT_ALLOWED_IN_LAYER',
+              { kind: 'metric', layer: layer.id, key, allowed, ...labels(layer.id) },
+              { severity: 'error', metric: key },
+            ),
+          );
           continue;
         }
         if (value !== notDefined) metrics[key] = value;
@@ -159,26 +165,25 @@ export function evaluateLayers(
     if (layer.requirements) {
       const levels = Object.values(layer.requirements);
       if (levels.some((l) => !['L', 'M', 'H', 'X'].includes(l as string))) {
-        add({
-          severity: 'error',
-          code: 'INVALID_REQUIREMENTS',
-          message: `${label} has invalid security requirements. Use L, M, H, or X.`,
-        });
+        add(makeIssue('INVALID_REQUIREMENTS', { layer: layer.id, ...labels(layer.id) }, { severity: 'error' }));
       } else if (!allowed.includes('environmental')) {
-        add({
-          severity: 'error',
-          code: 'METRIC_NOT_ALLOWED_IN_LAYER',
-          message: `${label} has security requirements but doesn't accept environmental metrics.`,
-        });
+        add(
+          makeIssue(
+            'METRIC_NOT_ALLOWED_IN_LAYER',
+            { kind: 'requirements', layer: layer.id, ...labels(layer.id) },
+            { severity: 'error' },
+          ),
+        );
       } else {
         for (const [key, value] of Object.entries(requirementsToMetrics(layer.requirements))) {
           if (key in metrics) {
-            add({
-              severity: 'error',
-              code: 'METRIC_CONFLICT',
-              metric: key,
-              message: `${label} sets ${key} in both its vector and its security requirements.`,
-            });
+            add(
+              makeIssue(
+                'METRIC_CONFLICT',
+                { kind: 'requirements', key, layer: layer.id, ...labels(layer.id) },
+                { severity: 'error', metric: key },
+              ),
+            );
             continue;
           }
           metrics[key] = value;
@@ -213,12 +218,18 @@ export function evaluateLayers(
     if (distinct.size === 1) {
       winner = candidates[0];
     } else if (conflict === 'error') {
-      issues.push({
-        severity: 'error',
-        code: 'METRIC_CONFLICT',
-        metric: m.key,
-        message: `${m.key} is set to different values: ${candidates.map((c) => `${labelOf(ordered, c.layer)} ${m.key}:${c.value}`).join(', ')}.`,
-      });
+      issues.push(
+        makeIssue(
+          'METRIC_CONFLICT',
+          {
+            kind: 'layers',
+            key: m.key,
+            values: candidates.map((c) => ({ layer: c.layer, value: c.value })),
+            ...labels(...candidates.map((c) => c.layer)),
+          },
+          { severity: 'error', metric: m.key },
+        ),
+      );
       continue;
     } else if (conflict === 'first') {
       winner = candidates[0];
@@ -228,12 +239,9 @@ export function evaluateLayers(
       const picked = conflict(m.key, candidates);
       const match = candidates.find((c) => c.value === picked);
       if (!match) {
-        issues.push({
-          severity: 'error',
-          code: 'INVALID_CONFLICT_RESOLUTION',
-          metric: m.key,
-          message: `The conflict rule returned "${picked}" for ${m.key}, which no layer set.`,
-        });
+        issues.push(
+          makeIssue('INVALID_CONFLICT_RESOLUTION', { key: m.key, picked: String(picked) }, { severity: 'error', metric: m.key }),
+        );
         continue;
       }
       winner = match;
@@ -260,6 +268,3 @@ export function evaluateLayers(
   };
 }
 
-function labelOf(layers: LayerOutcome[], id: string): string {
-  return layers.find((l) => l.id === id)?.label ?? id;
-}

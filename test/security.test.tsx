@@ -111,6 +111,6 @@ describe('component limits', () => {
   it('shows one error for an oversized controlled value', () => {
     render(<CvssInput value={'x/'.repeat(5000)} onChange={() => {}} />);
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
-    expect(screen.getByText(/The vector is 10000 characters long/)).toBeTruthy();
+    expect(screen.getByText(/The vector is 10,000 characters long/)).toBeTruthy();
   });
 });

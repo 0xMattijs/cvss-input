@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
-import { GROUP_LABELS, VERSIONS } from '../core/definitions';
+import { VERSIONS } from '../core/definitions';
 import { evaluateLayers } from '../core/layers';
+import { formatIssue, messageFormat } from '../core/messages';
+import type { CvssMessages, CvssMessagesInput } from '../core/messages';
 import type { ConflictRule, CvssLayer, LayeredResult, VersionMode } from '../core/types';
 import { ScorePanel } from './CvssInput';
+import { useCvssMessages } from './messages';
 
 export interface UseCvssLayersOptions {
   version?: VersionMode;
@@ -42,6 +45,8 @@ export interface CvssCombinedProps extends UseCvssLayersOptions {
   showSources?: boolean;
   /** Show errors and warnings. Default: true. */
   showIssues?: boolean;
+  /** Texts in another language, such as `nl`. Overrides a `CvssMessagesProvider`. Default: English. */
+  messages?: CvssMessages | CvssMessagesInput;
   className?: string;
 }
 
@@ -58,11 +63,15 @@ export function CvssCombined({
   showVector = true,
   showSources = true,
   showIssues = true,
+  messages,
   className,
 }: CvssCombinedProps) {
+  const msg = useCvssMessages(messages);
   const r = useCvssLayers(baseVector, layers, { version, strict, conflict, maxLength, v2Method });
-  const labels: Record<string, string> = { base: 'Base vector' };
+  const labels: Record<string, string> = { base: msg.ui.baseVector };
   for (const l of r.layers) labels[l.id] = l.label;
+  const fmt = messageFormat(msg, (layer) => labels[layer]);
+  const ui = msg.ui;
   const def = r.version ? VERSIONS[r.version] : null;
 
   // Non-base metrics that any layer set, in canonical order.
@@ -78,11 +87,15 @@ export function CvssCombined({
     : [];
 
   return (
-    <section className={['cvss', 'cvss-combined', className].filter(Boolean).join(' ')} aria-label={title ?? 'Combined CVSS score'}>
+    <section
+      className={['cvss', 'cvss-combined', className].filter(Boolean).join(' ')}
+      lang={msg.locale}
+      aria-label={title ?? ui.combinedScore}
+    >
       {title && <div className="cvss-label">{title}</div>}
       <div className="cvss-meta">
         <span className="cvss-version" data-empty={!r.version || undefined}>
-          {r.version ? `CVSS ${r.version}` : 'Version unknown'}
+          {r.version ? `CVSS ${r.version}` : ui.versionUnknown}
         </span>
         {r.layers.map((l) => (
           <span key={l.id} className="cvss-layer-chip">
@@ -95,21 +108,21 @@ export function CvssCombined({
         <ul className="cvss-issues">
           {r.issues.map((issue, n) => (
             <li key={n} className="cvss-issue" data-severity={issue.severity}>
-              <span className="cvss-issue-kind">{issue.severity === 'error' ? 'Error' : 'Note'}</span>
+              <span className="cvss-issue-kind">{issue.severity === 'error' ? ui.error : ui.note}</span>
               <span>
                 {issue.layer && <strong>{labels[issue.layer] ?? issue.layer}: </strong>}
-                {issue.message}
+                {formatIssue(issue, msg, fmt)}
               </span>
             </li>
           ))}
         </ul>
       )}
 
-      <ScorePanel scores={r.scores} />
+      <ScorePanel scores={r.scores} messages={msg} />
 
       {showVector && r.combined && (
         <div className="cvss-meta">
-          <span>Combined</span>
+          <span>{ui.combined}</span>
           <code className="cvss-base-vector">{r.combined}</code>
         </div>
       )}
@@ -117,28 +130,28 @@ export function CvssCombined({
       {showSources && rows.length > 0 && def && (
         <div className="cvss-table-wrap">
           <table className="cvss-sources">
-            <caption>Metric sources</caption>
+            <caption>{ui.sources}</caption>
             <thead>
               <tr>
-                <th scope="col">Metric</th>
-                <th scope="col">Value</th>
-                <th scope="col">Source</th>
+                <th scope="col">{ui.sourcesMetric}</th>
+                <th scope="col">{ui.sourcesValue}</th>
+                <th scope="col">{ui.sourcesSource}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(({ m, value, source, override, conflicting }) => (
                 <tr key={m.key}>
                   <td>
-                    {m.name} <code>{m.key}</code>
-                    <div className="cvss-score-detail">{GROUP_LABELS[m.group]}</div>
+                    {fmt.metric(r.version!, m.key)} <code>{m.key}</code>
+                    <div className="cvss-score-detail">{msg.groups[m.group]}</div>
                   </td>
                   <td>
                     {value !== undefined ? (
                       <>
-                        {m.values.find((v) => v.code === value)?.name ?? value} <code>{value}</code>
+                        {fmt.value(r.version!, m.key, value)} <code>{value}</code>
                       </>
                     ) : (
-                      'Conflict'
+                      ui.conflict
                     )}
                   </td>
                   <td>
@@ -146,12 +159,12 @@ export function CvssCombined({
                     {override?.overridden.map((o) => (
                       <div key={o.layer}>
                         <del>
-                          <span className="cvss-sr-only">Overridden: </span>
+                          <span className="cvss-sr-only">{ui.overridden}</span>
                           {labels[o.layer] ?? o.layer}: <code>{o.value}</code>
                         </del>
                       </div>
                     ))}
-                    {conflicting && !source && <span>See the error above.</span>}
+                    {conflicting && !source && <span>{ui.seeErrorAbove}</span>}
                   </td>
                 </tr>
               ))}

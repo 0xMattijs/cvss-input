@@ -31,6 +31,9 @@ First release.
   when the field loses focus. Strict mode treats that as an error.
 - Error marks in the text field, and a **Go to position** button for each issue that selects the bad
   part of the vector.
+- Languages: English and Dutch catalogs (`en`, `nl`) for every text, including metric and value names
+  and issue messages. Set one with `CvssMessagesProvider` or the `messages` prop. Scores follow the
+  language's number format. Issues carry `params`, and `formatIssue` formats them in any language.
 - `valueOrder`: shows each metric's values as in FIRST's calculator (the default), least severe first,
   or most severe first.
 - `v2Method`: CVSS 2.0 Temporal and Environmental scores as NVD's calculator computes them (the

@@ -115,10 +115,67 @@ export type IssueCode =
   | 'TOO_LONG'
   | 'TOO_MANY_ISSUES';
 
+/**
+ * The values each issue's message is built from, by issue code. Translations
+ * use these to word the message in their own language; see `CvssMessages`.
+ * Layer values are layer IDs; format them with `MessageFormat.layer`, which
+ * uses `labels` (the display names of the layers the issue mentions).
+ */
+export interface IssueParams {
+  EMPTY: Record<string, never>;
+  UNKNOWN_PREFIX: { text: string };
+  NONSTANDARD_PREFIX: Record<string, never>;
+  MISSING_PREFIX: { prefix: string; strict: boolean };
+  AMBIGUOUS_VERSION: Record<string, never>;
+  UNDETECTABLE_VERSION: Record<string, never>;
+  /** `source` is `base` when the base vector sets the version, `forced` when the `version` option does. */
+  VERSION_MISMATCH: { found: CvssVersion; expected: CvssVersion; source: 'base' | 'forced' };
+  /** `raw` is empty for an empty segment, as in `//`. */
+  MALFORMED_SEGMENT: { raw: string };
+  UNKNOWN_METRIC: { key: string; version: CvssVersion };
+  INVALID_VALUE: { key: string; value: string; version: CvssVersion; valid: string[] };
+  DUPLICATE_METRIC: { key: string };
+  MISSING_METRIC: { key: string; version: CvssVersion };
+  METRIC_ORDER: { strict: boolean; version: CvssVersion };
+  BASE_METRIC_IN_OVERLAY: { key: string };
+  /**
+   * From `evaluate`: the base vector's own errors (empty if its version is unknown).
+   * From `evaluateLayers`: `issues` is null.
+   */
+  INVALID_BASE_VECTOR: { issues: CvssIssue[] | null };
+  /** `requirements`: a layer sets the metric in both its vector and its requirements. `layers`: layers disagree. */
+  METRIC_CONFLICT: LayerLabels &
+    (
+      | { kind: 'requirements'; key: string; layer: string }
+      | { kind: 'layers'; key: string; values: Array<{ layer: string; value: string }> }
+    );
+  /** `metric`: a layer sets a metric outside its groups. `requirements`: a layer without the environmental group has requirements. */
+  METRIC_NOT_ALLOWED_IN_LAYER: LayerLabels &
+    (
+      | { kind: 'metric'; layer: string; key: string; allowed: MetricGroup[] }
+      | { kind: 'requirements'; layer: string }
+    );
+  MISSING_LAYER_VECTOR: LayerLabels & { layer: string; family: VersionFamily; hasRequirements: boolean };
+  INVALID_REQUIREMENTS: LayerLabels & { layer: string };
+  /** `reserved` is true when the ID is `base`. */
+  DUPLICATE_LAYER_ID: { layer: string; reserved: boolean };
+  INVALID_CONFLICT_RESOLUTION: { key: string; picked: string };
+  TOO_LONG: { length: number; max: number };
+  TOO_MANY_ISSUES: { count: number };
+}
+
+/** Display names of the layers an issue mentions, by layer ID. Layers without a label are left out. */
+export interface LayerLabels {
+  labels?: Record<string, string>;
+}
+
 export interface CvssIssue {
   severity: 'error' | 'warning';
   code: IssueCode;
+  /** The message in English. Use `formatIssue` for other languages. */
   message: string;
+  /** The values the message is built from. Set on every issue the core reports. */
+  params?: IssueParams[IssueCode];
   metric?: string;
   /** Layer the issue belongs to, for results of `evaluateLayers`. */
   layer?: string;

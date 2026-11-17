@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ALL_VERSIONS, GROUP_LABELS, VERSIONS, orderedValues } from '../core/definitions';
-import { DEFAULT_MAX_LENGTH, evaluate, serialize } from '../core/evaluate';
+import { ALL_VERSIONS, VERSIONS, orderedValues } from '../core/definitions';
+import { DEFAULT_MAX_LENGTH, MAX_ISSUES, evaluate, serialize } from '../core/evaluate';
 import { evaluateLayers } from '../core/layers';
+import { en, formatIssue, messageFormat } from '../core/messages';
+import type { CvssMessages, CvssMessagesInput, MessageFormat } from '../core/messages';
 import type {
   ConflictRule,
   CvssIssue,
@@ -16,6 +18,7 @@ import type {
   ValueOrder,
   VersionMode,
 } from '../core/types';
+import { useCvssMessages } from './messages';
 import { useCvss } from './useCvss';
 
 export interface CvssInputProps {
@@ -75,6 +78,11 @@ export interface CvssInputProps {
   disabled?: boolean;
   /** Label for the text field. */
   label?: string;
+  /**
+   * Texts in another language, such as `nl`, or a partial catalog. Overrides a
+   * `CvssMessagesProvider`. Default: English.
+   */
+  messages?: CvssMessages | CvssMessagesInput;
   className?: string;
 }
 
@@ -105,13 +113,14 @@ function buildLayers(
   baseVector: string | undefined,
   layers: CvssLayer[] | undefined,
   layerId: string,
+  ownLabel: string,
 ): { base: string; layers: CvssLayer[] } | null {
   if (baseVector === undefined && layers === undefined) return null;
   if (baseVector === undefined) return { base: text, layers: layers ?? [] };
   const list = layers ?? [];
   const index = list.findIndex((l) => l.id === layerId);
   const own: CvssLayer =
-    index >= 0 ? { ...list[index], vector: text } : { id: layerId, label: 'This input', vector: text };
+    index >= 0 ? { ...list[index], vector: text } : { id: layerId, label: ownLabel, vector: text };
   return {
     base: baseVector,
     layers: index >= 0 ? list.map((l, n) => (n === index ? own : l)) : [...list, own],
@@ -126,6 +135,7 @@ function evaluateAll(
     baseVector?: string;
     layers?: CvssLayer[];
     layerId: string;
+    ownLabel: string;
     conflict?: ConflictRule;
     maxLength: number;
     v2Method?: 'nvd' | 'spec';
@@ -138,7 +148,7 @@ function evaluateAll(
     maxLength: opts.maxLength,
     v2Method: opts.v2Method,
   });
-  const built = buildLayers(text, opts.baseVector, opts.layers, opts.layerId);
+  const built = buildLayers(text, opts.baseVector, opts.layers, opts.layerId, opts.ownLabel);
   const layered = built
     ? evaluateLayers(built.base, built.layers, {
         version: opts.version,
@@ -170,17 +180,20 @@ export function CvssInput({
   readOnly = false,
   disabled = false,
   label,
+  messages,
   className,
 }: CvssInputProps) {
+  const msg = useCvssMessages(messages);
   const [internal, setInternal] = useState(defaultValue);
   const controlled = value !== undefined;
   const text = controlled ? value : internal;
 
   const overlay = baseVector !== undefined;
   const layersKey = JSON.stringify(layers ?? null);
-  const evalOpts = { version, strict, baseVector, layers, layerId, conflict, maxLength, v2Method };
+  const ownLabel = msg.ui.thisInput;
+  const evalOpts = { version, strict, baseVector, layers, layerId, ownLabel, conflict, maxLength, v2Method };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const { own: result, layered } = useMemo(() => evaluateAll(text, evalOpts), [text, version, strict, baseVector, layersKey, layerId, conflict, maxLength, v2Method]);
+  const { own: result, layered } = useMemo(() => evaluateAll(text, evalOpts), [text, version, strict, baseVector, layersKey, layerId, ownLabel, conflict, maxLength, v2Method]);
   const base = useCvss(baseVector ?? '', { version, strict, maxLength, v2Method });
 
   const emit = useCallback(
@@ -192,7 +205,7 @@ export function CvssInput({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [controlled, onChange, version, strict, baseVector, layersKey, layerId, conflict, maxLength, v2Method],
+    [controlled, onChange, version, strict, baseVector, layersKey, layerId, ownLabel, conflict, maxLength, v2Method],
   );
 
   const [emptyVersion, setEmptyVersion] = useState<CvssVersion>(defaultPickerVersion);
@@ -227,10 +240,11 @@ export function CvssInput({
 
   // Issues: the input's own, plus layer issues from the combination.
   const labels = useMemo(() => {
-    const map: Record<string, string> = { base: 'Base vector' };
+    const map: Record<string, string> = { base: msg.ui.baseVector };
     for (const l of layered?.layers ?? []) map[l.id] = l.label;
     return map;
-  }, [layered]);
+  }, [layered, msg]);
+  const fmt = useMemo(() => messageFormat(msg, (layer) => labels[layer]), [msg, labels]);
   const shownIssues: CvssIssue[] = [...result.issues];
   if (layered) {
     for (const issue of layered.issues) {
@@ -302,22 +316,26 @@ export function CvssInput({
       for (const [key, v] of Object.entries(layered.base.metrics)) {
         const group = VERSIONS[layered.base.version!]?.metrics.find((m) => m.key === key)?.group;
         if (group === 'base' || v === VERSIONS[layered.base.version!].notDefined) continue;
-        (map[key] ??= []).push({ label: 'Base vector', value: v, applied: layered.provenance[key] === 'base' });
+        (map[key] ??= []).push({ label: msg.ui.baseVector, value: v, applied: layered.provenance[key] === 'base' });
       }
     }
-    const labelOf = (layer: string) => (layer === 'base' ? 'Base vector' : labels[layer] ?? layer);
+    const labelOf = (layer: string) => (layer === 'base' ? msg.ui.baseVector : labels[layer] ?? layer);
     return { map, ownId: ownLayerId, provenance: layered.provenance, labelOf };
-  }, [layered, overlay, ownLayerId, labels]);
+  }, [layered, overlay, ownLayerId, labels, msg]);
 
   const scores = layered ? layered.scores : result.scores;
   const contextLayers = layered ? layered.layers.filter((l) => l.id !== ownLayerId) : [];
 
   return (
-    <div className={['cvss', className].filter(Boolean).join(' ')} data-disabled={disabled || undefined}>
+    <div
+      className={['cvss', className].filter(Boolean).join(' ')}
+      lang={msg.locale}
+      data-disabled={disabled || undefined}
+    >
       {mode !== 'picker' && (
         <div className="cvss-field">
           <label className="cvss-label" htmlFor={inputId}>
-            {label ?? (overlay ? (ownLayer?.label ?? 'Temporal and environmental metrics') : 'CVSS vector')}
+            {label ?? (overlay ? (ownLayer?.label ?? msg.ui.overlayLabel) : msg.ui.vectorLabel)}
           </label>
           <div className="cvss-text-wrap">
             <div className="cvss-text-marks" ref={marksRef} aria-hidden="true">
@@ -357,11 +375,11 @@ export function CvssInput({
         </div>
       )}
 
-      <VersionLine result={result} mode={version} overlay={overlay} baseResult={overlay ? base : null} />
+      <VersionLine result={result} mode={version} overlay={overlay} baseResult={overlay ? base : null} msg={msg} />
 
       {contextLayers.length > 0 && (
         <div className="cvss-meta">
-          <span>Also applied:</span>
+          <span>{msg.ui.alsoApplied}</span>
           {contextLayers.map((l) => (
             <span key={l.id} className="cvss-layer-chip">
               {l.label}
@@ -379,6 +397,8 @@ export function CvssInput({
               issue={issue}
               layerLabel={issue.layer && issue.layer !== ownLayerId ? labels[issue.layer] : undefined}
               ranged={ownRanged.includes(issue)}
+              text={formatIssue(issue, msg, fmt)}
+              msg={msg}
               onSelectRange={canSelect ? () => selectRange(issue) : undefined}
             />
           ))}
@@ -388,18 +408,18 @@ export function CvssInput({
         <div className="cvss-fixes">
           {(['3.1', '3.0'] as const).map((v) => (
             <button key={v} type="button" className="cvss-fix" onClick={() => emit(`CVSS:${v}/${text.trim()}`)}>
-              Treat as CVSS {v}
+              {msg.ui.treatAs(v)}
             </button>
           ))}
         </div>
       )}
 
-      <ScorePanel scores={scores} />
-      <Announcer message={isEmpty && !overlay ? '' : statusMessage(scores, shownIssues)} />
+      <ScorePanel scores={scores} messages={msg} />
+      <Announcer message={isEmpty && !overlay ? '' : statusMessage(scores, shownIssues, msg, fmt)} />
 
       {layered?.combined && contextLayers.length > 0 && (
         <div className="cvss-meta">
-          <span>Combined</span>
+          <span>{msg.ui.combined}</span>
           <code className="cvss-base-vector">{layered.combined}</code>
         </div>
       )}
@@ -415,6 +435,7 @@ export function CvssInput({
           allowedGroups={ownLayer?.groups ?? null}
           context={context}
           valueOrder={valueOrder}
+          messages={msg}
           versionChoice={
             !overlay && version === 'auto' && isEmpty
               ? { value: emptyVersion, onChange: setEmptyVersion }
@@ -445,25 +466,27 @@ function VersionLine({
   mode,
   overlay,
   baseResult,
+  msg,
 }: {
   result: CvssResult;
   mode: VersionMode;
   overlay: boolean;
   baseResult: CvssResult | null;
+  msg: CvssMessages;
 }) {
   const v = result.version ?? baseResult?.version ?? null;
   let how: string;
-  if (overlay) how = 'from base vector';
-  else if (mode === 'auto') how = 'detected';
-  else how = 'required';
+  if (overlay) how = msg.ui.versionFromBase;
+  else if (mode === 'auto') how = msg.ui.versionDetected;
+  else how = msg.ui.versionRequired;
   return (
     <div className="cvss-meta">
       <span className="cvss-version" data-empty={!v || undefined}>
-        {v ? `CVSS ${v}` : 'Version unknown'}
+        {v ? `CVSS ${v}` : msg.ui.versionUnknown}
       </span>
       {v && <span className="cvss-version-how">{how}</span>}
       {overlay && baseResult?.normalized && (
-        <code className="cvss-base-vector" title="Base vector">
+        <code className="cvss-base-vector" title={msg.ui.baseVector}>
           {baseResult.normalized}
         </code>
       )}
@@ -473,31 +496,36 @@ function VersionLine({
 
 function IssueItem({
   issue,
+  text,
   layerLabel,
   ranged,
   onSelectRange,
+  msg,
 }: {
   issue: CvssIssue;
+  /** The issue's message in the current language. */
+  text: string;
   layerLabel?: string;
   ranged: boolean;
   onSelectRange?: () => void;
+  msg: CvssMessages;
 }) {
-  const position = `position ${issue.start! + 1}`;
+  const position = issue.start! + 1;
   return (
     <li className="cvss-issue" data-severity={issue.severity}>
-      <span className="cvss-issue-kind">{issue.severity === 'error' ? 'Error' : 'Note'}</span>
+      <span className="cvss-issue-kind">{issue.severity === 'error' ? msg.ui.error : msg.ui.note}</span>
       <span>
         {layerLabel && <strong>{layerLabel}: </strong>}
-        {issue.message}
+        {text}
         {ranged && (
           <>
             {' '}
             {onSelectRange ? (
               <button type="button" className="cvss-issue-pos" onClick={onSelectRange}>
-                Go to {position}
+                {msg.ui.goToPosition(position)}
               </button>
             ) : (
-              <span className="cvss-issue-pos">({position})</span>
+              <span className="cvss-issue-pos">{msg.ui.position(position)}</span>
             )}
           </>
         )}
@@ -535,11 +563,21 @@ export function markSegments(
 
 // ---------------------------------------------------------------------------
 
-export function ScorePanel({ scores }: { scores: CvssScores | null }) {
+export function ScorePanel({
+  scores,
+  messages,
+}: {
+  scores: CvssScores | null;
+  /** Texts in another language. Default: the `CvssMessagesProvider`'s, or English. */
+  messages?: CvssMessages | CvssMessagesInput;
+}) {
+  const msg = useCvssMessages(messages);
+  const fmt = useMemo(() => messageFormat(msg), [msg]);
+  const cell = { msg, fmt };
   if (!scores) {
     return (
       <div className="cvss-scores" data-empty>
-        <ScoreCell title="Score" value={null} />
+        <ScoreCell title={msg.ui.score} value={null} {...cell} />
       </div>
     );
   }
@@ -549,7 +587,8 @@ export function ScorePanel({ scores }: { scores: CvssScores | null }) {
         <ScoreCell
           title={scores.nomenclature}
           value={scores.score}
-          detail={`MacroVector ${scores.macroVector}`}
+          detail={msg.ui.macroVector(scores.macroVector)}
+          {...cell}
         />
       </div>
     );
@@ -558,24 +597,27 @@ export function ScorePanel({ scores }: { scores: CvssScores | null }) {
   return (
     <div className="cvss-scores">
       <ScoreCell
-        title="Base"
+        title={msg.ui.base}
         value={scores.base}
         final={final === 'base'}
-        detail={`Impact ${scores.impact.toFixed(1)} · Exploitability ${scores.exploitability.toFixed(1)}`}
+        detail={msg.ui.baseDetail(fmt.score(scores.impact), fmt.score(scores.exploitability))}
+        {...cell}
       />
       <ScoreCell
-        title="Temporal"
+        title={msg.ui.temporal}
         value={scores.temporal}
         final={final === 'temporal'}
         muted={!scores.temporalDefined}
-        detail={scores.temporalDefined ? undefined : 'No temporal metrics set'}
+        detail={scores.temporalDefined ? undefined : msg.ui.noTemporal}
+        {...cell}
       />
       <ScoreCell
-        title="Environmental"
+        title={msg.ui.environmental}
         value={scores.environmental}
         final={final === 'environmental'}
         muted={!scores.environmentalDefined}
-        detail={scores.environmentalDefined ? undefined : 'No environmental metrics set'}
+        detail={scores.environmentalDefined ? undefined : msg.ui.noEnvironmental}
+        {...cell}
       />
     </div>
   );
@@ -587,6 +629,8 @@ function ScoreCell({
   detail,
   muted,
   final,
+  msg,
+  fmt,
 }: {
   title: string;
   value: ScoreValue | null;
@@ -594,18 +638,20 @@ function ScoreCell({
   muted?: boolean;
   /** Marks the cell holding the final score, when several scores are shown. */
   final?: boolean;
+  msg: CvssMessages;
+  fmt: MessageFormat;
 }) {
   return (
     <div className="cvss-score" data-muted={muted || undefined} data-final={final || undefined}>
       <div className="cvss-score-title">
         {title}
-        {final && <span className="cvss-final-badge">Final</span>}
+        {final && <span className="cvss-final-badge">{msg.ui.final}</span>}
       </div>
       <div className="cvss-score-row">
-        <span className="cvss-score-number">{value ? value.score.toFixed(1) : '—'}</span>
+        <span className="cvss-score-number">{value ? fmt.score(value.score) : '—'}</span>
         {value && (
           <span className="cvss-severity" data-severity={value.severity.toLowerCase()}>
-            {value.severity}
+            {msg.severity[value.severity]}
           </span>
         )}
       </div>
@@ -636,6 +682,7 @@ export function MetricPicker({
   allowedGroups = null,
   context = null,
   valueOrder = 'first',
+  messages,
 }: {
   version: CvssVersion | null;
   metrics: Record<string, string>;
@@ -656,8 +703,12 @@ export function MetricPicker({
   } | null;
   /** Order of each metric's values. See `CvssInputProps.valueOrder`. */
   valueOrder?: ValueOrder;
+  /** Texts in another language. Default: the `CvssMessagesProvider`'s, or English. */
+  messages?: CvssMessages | CvssMessagesInput;
 }) {
   const id = useId();
+  const msg = useCvssMessages(messages);
+  const fmt = useMemo(() => messageFormat(msg), [msg]);
   const groups = useMemo(() => {
     if (!version) return [];
     const def = VERSIONS[version];
@@ -669,7 +720,7 @@ export function MetricPicker({
   if (!version) {
     return (
       <div className="cvss-picker" data-blocked>
-        <p className="cvss-picker-note">Enter a valid vector or set a version to use the metric picker.</p>
+        <p className="cvss-picker-note">{msg.ui.pickerUnavailable}</p>
       </div>
     );
   }
@@ -680,7 +731,7 @@ export function MetricPicker({
     <div className="cvss-picker" data-blocked={blocked || undefined}>
       {versionChoice && (
         <div className="cvss-picker-version">
-          <label htmlFor={`${id}-version`}>Version</label>
+          <label htmlFor={`${id}-version`}>{msg.ui.version}</label>
           <select
             id={`${id}-version`}
             value={versionChoice.value}
@@ -696,7 +747,7 @@ export function MetricPicker({
         </div>
       )}
       {blocked && (
-        <p className="cvss-picker-note">Fix the errors in the vector to edit it with the picker.</p>
+        <p className="cvss-picker-note">{msg.ui.pickerBlocked}</p>
       )}
       {groups.map(({ group, metrics: groupMetrics }) => {
         const readOnlyGroup = baseMetrics !== null && group === 'base';
@@ -713,8 +764,8 @@ export function MetricPicker({
             open={!readOnlyGroup && (group === 'base' || anySet) ? true : undefined}
           >
             <summary>
-              {GROUP_LABELS[group]}
-              {readOnlyGroup && <span className="cvss-group-note"> (from base vector)</span>}
+              {msg.groups[group]}
+              {readOnlyGroup && <span className="cvss-group-note">{' ' + msg.ui.groupFromBase}</span>}
             </summary>
             <div className="cvss-metrics">
               {groupMetrics.map((m) => {
@@ -725,8 +776,8 @@ export function MetricPicker({
                 let ownNote: string | null = null;
                 if (ownSet && others.length > 0 && context && winner !== context.ownId) {
                   ownNote = winner
-                    ? `Overridden by ${context.labelOf(winner)}.`
-                    : 'Conflicts with another layer.';
+                    ? msg.ui.overriddenBy(context.labelOf(winner))
+                    : msg.ui.conflictsWithLayer;
                 }
                 return (
                   <fieldset
@@ -736,7 +787,7 @@ export function MetricPicker({
                     aria-describedby={others.length > 0 ? `${id}-${m.key}-context` : undefined}
                   >
                     <legend>
-                      {m.name} <abbr className="cvss-metric-key">{m.key}</abbr>
+                      {fmt.metric(version, m.key)} <abbr className="cvss-metric-key">{m.key}</abbr>
                     </legend>
                     <div className="cvss-options">
                       {orderedValues(m, valueOrder).map((v) => (
@@ -748,7 +799,7 @@ export function MetricPicker({
                             checked={current === v.code}
                             onChange={() => onSelect(m.key, v.code)}
                           />
-                          <span>{v.name}</span>
+                          <span>{fmt.value(version, m.key, v.code)}</span>
                         </label>
                       ))}
                     </div>
@@ -756,8 +807,7 @@ export function MetricPicker({
                       <div className="cvss-context" id={`${id}-${m.key}-context`}>
                         {others.map((o) => (
                           <span key={o.label} className="cvss-context-item" data-applied={o.applied || undefined}>
-                            {o.label}: {m.values.find((v) => v.code === o.value)?.name ?? o.value}
-                            {o.applied ? ' (applied)' : ' (not applied)'}
+                            {msg.ui.contextValue(o.label, fmt.value(version, m.key, o.value), o.applied)}
                           </span>
                         ))}
                         {ownNote && (
@@ -781,21 +831,27 @@ export function MetricPicker({
 // ---------------------------------------------------------------------------
 
 /** One-line summary for screen readers: the scores, or the number of problems. */
-export function statusMessage(scores: CvssScores | null, issues: CvssIssue[]): string {
+export function statusMessage(
+  scores: CvssScores | null,
+  issues: CvssIssue[],
+  messages: CvssMessages = en,
+  format: MessageFormat = messageFormat(messages),
+): string {
+  const ui = messages.ui;
   const errors = issues.filter((i) => i.severity === 'error');
   if (errors.length > 0) {
-    const count = errors.some((i) => i.code === 'TOO_MANY_ISSUES') ? 'More than 20 problems' : `${errors.length} ${errors.length === 1 ? 'problem' : 'problems'}`;
-    return `${count}. ${errors[0].message}`;
+    const capped = errors.some((i) => i.code === 'TOO_MANY_ISSUES');
+    return ui.statusProblems(capped ? MAX_ISSUES : errors.length, capped, formatIssue(errors[0], messages, format));
   }
   if (!scores) return '';
-  const fmt = (v: ScoreValue) => `${v.score.toFixed(1)} ${v.severity}`;
-  if (scores.kind === 'v4') return `${scores.nomenclature} ${fmt(scores.score)}.`;
-  const names = { base: 'Base', temporal: 'Temporal', threat: 'Threat', environmental: 'Environmental' };
-  const parts = [`Base ${fmt(scores.base)}`];
-  if (scores.temporalDefined) parts.push(`Temporal ${fmt(scores.temporal)}`);
-  if (scores.environmentalDefined) parts.push(`Environmental ${fmt(scores.environmental)}`);
-  const final = `Final ${fmt(scores.overall)} (${names[scores.overall.group]}).`;
-  return parts.length === 1 ? final : `${final} ${parts.join(', ')}.`;
+  const sev = (v: ScoreValue) => messages.severity[v.severity];
+  const one = (name: string, v: ScoreValue) => ui.statusScore(name, format.score(v.score), sev(v));
+  if (scores.kind === 'v4') return ui.statusScores([one(scores.nomenclature, scores.score)]);
+  const parts = [one(ui.base, scores.base)];
+  if (scores.temporalDefined) parts.push(one(ui.temporal, scores.temporal));
+  if (scores.environmentalDefined) parts.push(one(ui.environmental, scores.environmental));
+  const final = ui.statusFinal(format.score(scores.overall.score), sev(scores.overall), messages.groups[scores.overall.group]);
+  return parts.length === 1 ? final : `${final} ${ui.statusScores(parts)}`;
 }
 
 /**
