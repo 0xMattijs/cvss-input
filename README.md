@@ -2,6 +2,8 @@
 
 A React component and a framework-free scoring core for CVSS 2.0, 3.0, 3.1, and 4.0 vectors.
 
+**[Try the demo](https://0xmattijs.github.io/cvss-input/)**
+
 - Detects the version from the vector, or validates against a version you set.
 - Shows Base, Temporal, and Environmental scores for 2.0 and 3.x, and one labeled score
   (CVSS-B, CVSS-BT, CVSS-BE, or CVSS-BTE) for 4.0.
@@ -203,7 +205,10 @@ npm test          # unit, component, and differential tests
 npm run typecheck
 npm run build     # dist/ with ESM, CJS, types, and styles.css
 npm run dev       # demo page
+npm run build:demo  # static demo in demo/dist
 ```
+
+The demo deploys to GitHub Pages on every push to `master`.
 
 CI runs the typecheck, tests, and build on Node 22 and 24 with React 18 and 19 for every push to
 `master` and every pull request.

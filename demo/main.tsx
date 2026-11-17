@@ -17,6 +17,10 @@ function Demo() {
   return (
     <main>
       <h1>cvss-input</h1>
+      <p className="hint">
+        A React component and scoring core for CVSS 2.0, 3.0, 3.1, and 4.0 vectors.{' '}
+        <a href="https://github.com/0xMattijs/cvss-input">Source on GitHub</a>
+      </p>
 
       <section>
         <h2>Auto or forced version</h2>
