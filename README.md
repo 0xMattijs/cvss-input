@@ -45,6 +45,7 @@ import 'cvss-input/styles.css';
 | `version` | `'auto'` | `'auto'`, `'2.0'`, `'3.0'`, `'3.1'`, or `'4.0'`. |
 | `baseVector` | — | Complete vector that supplies the base metrics. The input then accepts only non-base metrics. |
 | `strict` | `false` | Treats non-canonical metric order and a missing prefix (forced 3.x or 4.0) as errors. |
+| `maxLength` | `1024` | Longest accepted vector. The field won't accept more, and longer values get one `TOO_LONG` error. |
 | `normalizeOnBlur` | `!strict` | Rewrites a valid vector in canonical form when the text field loses focus. |
 | `mode` | `'both'` | `'text'`, `'picker'`, or `'both'`. |
 | `defaultPickerVersion` | `'4.0'` | Version the picker starts with for an empty vector in auto mode. |
@@ -188,6 +189,25 @@ a conflict rule switch, and a vulnerability × asset score matrix, see
 | `CVSS2#` prefix or surrounding parentheses on a 2.0 vector | Accepted; removed on normalization | Same |
 
 Metric keys and values are case sensitive, as in the specifications.
+
+## Security
+
+The components render all text through React, which escapes it, so vectors, error messages, and layer
+labels can't inject HTML. If you use the core or your own UI, follow these rules:
+
+- **Store the normalized vector, not the raw input.** `onChange` passes exactly what the user typed,
+  valid or not, so the text field can show it. Persist `result.normalized` (or `combined` for layers)
+  only when `result.valid` is true. Those strings contain only metric names and values from the CVSS
+  specifications.
+- **Escape `issue.message` when you render it.** Messages quote the offending part of the input, such as
+  `"<img …>" isn't a CVSS 3.1 metric`. Insert them as text, never as HTML (no `innerHTML`, no unescaped
+  templates).
+- **Input length is limited.** `evaluate` rejects input longer than `maxLength` (default 1,024
+  characters) with one `TOO_LONG` error and doesn't parse it. The longest valid vector is 178 characters.
+  The same limit applies to base vectors and every layer vector, and the text field won't accept more.
+  Keep a limit when you validate vectors on a server.
+- **Issues are capped.** Each vector reports at most 20 issues; the rest are summarized in one
+  `TOO_MANY_ISSUES` issue.
 
 ## Scoring notes
 

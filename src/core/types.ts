@@ -81,7 +81,9 @@ export type IssueCode =
   | 'MISSING_LAYER_VECTOR'
   | 'INVALID_REQUIREMENTS'
   | 'DUPLICATE_LAYER_ID'
-  | 'INVALID_CONFLICT_RESOLUTION';
+  | 'INVALID_CONFLICT_RESOLUTION'
+  | 'TOO_LONG'
+  | 'TOO_MANY_ISSUES';
 
 export interface CvssIssue {
   severity: 'error' | 'warning';
@@ -108,6 +110,11 @@ export interface EvaluateOptions {
    * only hold temporal, threat, environmental, or supplemental metrics.
    */
   baseVector?: string;
+  /**
+   * Inputs longer than this are rejected with one `TOO_LONG` error and not parsed.
+   * Default: 1024. The longest valid vector is 178 characters (CVSS 4.0 with every metric set).
+   */
+  maxLength?: number;
 }
 
 export interface CvssResult {
@@ -192,6 +199,8 @@ export interface LayeredOptions {
   version?: VersionMode;
   strict?: boolean;
   conflict?: ConflictRule;
+  /** Maximum length of the base vector and of each layer vector. Default: 1024. */
+  maxLength?: number;
 }
 
 export interface LayerOutcome {

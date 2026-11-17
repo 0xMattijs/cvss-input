@@ -1,6 +1,6 @@
 import { useCallback, useId, useMemo, useState } from 'react';
 import { ALL_VERSIONS, GROUP_LABELS, VERSIONS } from '../core/definitions';
-import { evaluate, serialize } from '../core/evaluate';
+import { DEFAULT_MAX_LENGTH, evaluate, serialize } from '../core/evaluate';
 import { evaluateLayers } from '../core/layers';
 import type {
   ConflictRule,
@@ -51,6 +51,11 @@ export interface CvssInputProps {
   conflict?: ConflictRule;
   /** Treat non-canonical order and a missing 3.x/4.0 prefix as errors. Default: false. */
   strict?: boolean;
+  /**
+   * Maximum vector length. The text field won't accept more, and longer values
+   * (for example from `value`) are rejected unparsed. Default: 1024.
+   */
+  maxLength?: number;
   /** Rewrite the vector in canonical form when the text field loses focus. Default: `!strict`. */
   normalizeOnBlur?: boolean;
   /** Which editors to show. Default: `both`. */
@@ -113,12 +118,23 @@ function evaluateAll(
     layers?: CvssLayer[];
     layerId: string;
     conflict?: ConflictRule;
+    maxLength: number;
   },
 ): Evaluation {
-  const own = evaluate(text, { version: opts.version, strict: opts.strict, baseVector: opts.baseVector });
+  const own = evaluate(text, {
+    version: opts.version,
+    strict: opts.strict,
+    baseVector: opts.baseVector,
+    maxLength: opts.maxLength,
+  });
   const built = buildLayers(text, opts.baseVector, opts.layers, opts.layerId);
   const layered = built
-    ? evaluateLayers(built.base, built.layers, { version: opts.version, strict: opts.strict, conflict: opts.conflict })
+    ? evaluateLayers(built.base, built.layers, {
+        version: opts.version,
+        strict: opts.strict,
+        conflict: opts.conflict,
+        maxLength: opts.maxLength,
+      })
     : null;
   return { own, layered };
 }
@@ -133,6 +149,7 @@ export function CvssInput({
   layerId = 'input',
   conflict,
   strict = false,
+  maxLength = DEFAULT_MAX_LENGTH,
   normalizeOnBlur = !strict,
   mode = 'both',
   defaultPickerVersion = '4.0',
@@ -147,10 +164,10 @@ export function CvssInput({
 
   const overlay = baseVector !== undefined;
   const layersKey = JSON.stringify(layers ?? null);
-  const evalOpts = { version, strict, baseVector, layers, layerId, conflict };
+  const evalOpts = { version, strict, baseVector, layers, layerId, conflict, maxLength };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const { own: result, layered } = useMemo(() => evaluateAll(text, evalOpts), [text, version, strict, baseVector, layersKey, layerId, conflict]);
-  const base = useCvss(baseVector ?? '', { version, strict });
+  const { own: result, layered } = useMemo(() => evaluateAll(text, evalOpts), [text, version, strict, baseVector, layersKey, layerId, conflict, maxLength]);
+  const base = useCvss(baseVector ?? '', { version, strict, maxLength });
 
   const emit = useCallback(
     (next: string) => {
@@ -161,7 +178,7 @@ export function CvssInput({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [controlled, onChange, version, strict, baseVector, layersKey, layerId, conflict],
+    [controlled, onChange, version, strict, baseVector, layersKey, layerId, conflict, maxLength],
   );
 
   const [emptyVersion, setEmptyVersion] = useState<CvssVersion>(defaultPickerVersion);
@@ -260,6 +277,7 @@ export function CvssInput({
             autoCapitalize="off"
             readOnly={readOnly}
             disabled={disabled}
+            maxLength={maxLength}
             placeholder={placeholderFor(pickerVersion ?? defaultPickerVersion, overlay)}
             aria-invalid={showIssues && errors.length > 0}
             aria-describedby={issuesId}

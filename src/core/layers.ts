@@ -60,8 +60,8 @@ export function evaluateLayers(
   layers: CvssLayer[],
   options: LayeredOptions = {},
 ): LayeredResult {
-  const { version: mode = 'auto', strict = false, conflict = 'error' } = options;
-  const base = evaluate(baseVector, { version: mode, strict });
+  const { version: mode = 'auto', strict = false, conflict = 'error', maxLength } = options;
+  const base = evaluate(baseVector, { version: mode, strict, maxLength });
   const issues: CvssIssue[] = base.issues.map((i) => ({ ...i, layer: 'base' }));
 
   const empty = (outcomes: LayerOutcome[]): LayeredResult => ({
@@ -139,7 +139,7 @@ export function evaluateLayers(
     }
 
     if (vector !== null && vector.trim() !== '') {
-      result = evaluate(vector, { baseVector: baseOnly, version, strict });
+      result = evaluate(vector, { baseVector: baseOnly, version, strict, maxLength });
       for (const i of result.issues) add(i);
       for (const [key, value] of Object.entries(result.metrics)) {
         const mdef = getMetricDef(version, key);

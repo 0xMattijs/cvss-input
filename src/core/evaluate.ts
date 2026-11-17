@@ -109,6 +109,7 @@ export function tokenize(input: string): Tokenized {
  * Returns `'3.x'` for an unprefixed 3.x vector, which is ambiguous.
  */
 export function detectVersion(input: string): CvssVersion | '3.x' | null {
+  if (input.length > DEFAULT_MAX_LENGTH) return null;
   const t = tokenize(input);
   if (t.prefixVersion) return t.prefixVersion;
   return detectFromKeys(t.segments.map((s) => s.key));
@@ -153,6 +154,25 @@ export function scoreFor(version: CvssVersion, metrics: Record<string, string>):
 
 const isErr = (i: CvssIssue) => i.severity === 'error';
 
+/** Default maximum input length. The longest valid vector is 178 characters (CVSS 4.0 with every metric set). */
+export const DEFAULT_MAX_LENGTH = 1024;
+
+/** Maximum number of issues reported per vector; the rest are summarized in one issue. */
+export const MAX_ISSUES = 20;
+
+/** Keeps the first MAX_ISSUES issues and replaces the rest with one summary issue. */
+function capIssues(issues: CvssIssue[]): CvssIssue[] {
+  if (issues.length <= MAX_ISSUES) return issues;
+  const kept = issues.slice(0, MAX_ISSUES);
+  const dropped = issues.slice(MAX_ISSUES);
+  kept.push({
+    severity: dropped.some(isErr) ? 'error' : 'warning',
+    code: 'TOO_MANY_ISSUES',
+    message: `…and ${dropped.length} more ${dropped.length === 1 ? 'problem' : 'problems'}.`,
+  });
+  return kept;
+}
+
 /**
  * Parses, validates, normalizes, and scores a CVSS vector.
  *
@@ -161,7 +181,7 @@ const isErr = (i: CvssIssue) => i.severity === 'error';
  * // { kind: 'classic', base: { score: 9.8, severity: 'Critical' }, ... }
  */
 export function evaluate(input: string, options: EvaluateOptions = {}): CvssResult {
-  const { version: mode = 'auto', strict = false, baseVector } = options;
+  const { version: mode = 'auto', strict = false, baseVector, maxLength = DEFAULT_MAX_LENGTH } = options;
   const overlay = baseVector !== undefined;
   const issues: CvssIssue[] = [];
 
@@ -173,17 +193,27 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
     effectiveMetrics: {},
     normalized: null,
     combined: null,
-    issues,
     valid: false,
     scores: null,
     overlay,
     ...partial,
+    issues: capIssues(issues),
   });
+
+  // Reject oversized input before parsing, so it can't produce unbounded work or issues.
+  if (input.length > maxLength) {
+    issues.push({
+      severity: 'error',
+      code: 'TOO_LONG',
+      message: `The vector is ${input.length} characters long; the maximum is ${maxLength}.`,
+    });
+    return result({});
+  }
 
   // In overlay mode, the base vector decides the version.
   let base: CvssResult | null = null;
   if (overlay) {
-    base = evaluate(baseVector, { version: mode, strict });
+    base = evaluate(baseVector, { version: mode, strict, maxLength });
     if (!base.valid || !base.version) {
       issues.push({
         severity: 'error',

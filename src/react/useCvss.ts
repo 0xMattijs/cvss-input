@@ -4,9 +4,9 @@ import type { CvssResult, EvaluateOptions } from '../core/types';
 
 /** Parses, validates, and scores a vector. Recomputes only when an input changes. */
 export function useCvss(vector: string, options: EvaluateOptions = {}): CvssResult {
-  const { version, strict, baseVector } = options;
+  const { version, strict, baseVector, maxLength } = options;
   return useMemo(
-    () => evaluate(vector, { version, strict, baseVector }),
-    [vector, version, strict, baseVector],
+    () => evaluate(vector, { version, strict, baseVector, maxLength }),
+    [vector, version, strict, baseVector, maxLength],
   );
 }
