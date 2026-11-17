@@ -9,7 +9,7 @@
   --cvss-bg: #ffffff;
   --cvss-surface: #f6f7f9;
   --cvss-border: #d6d9df;
-  --cvss-border-strong: #a9afba;
+  --cvss-border-strong: #8a8f9a;
   --cvss-text: #1b1f27;
   --cvss-text-muted: #5d6573;
   --cvss-accent: #2456c7;
@@ -41,7 +41,7 @@
     --cvss-bg: #15181d;
     --cvss-surface: #1d2128;
     --cvss-border: #343a45;
-    --cvss-border-strong: #4b5361;
+    --cvss-border-strong: #646b78;
     --cvss-text: #e7e9ee;
     --cvss-text-muted: #9aa2b1;
     --cvss-accent: #7aa2ff;
@@ -63,7 +63,7 @@
   --cvss-bg: #15181d;
   --cvss-surface: #1d2128;
   --cvss-border: #343a45;
-  --cvss-border-strong: #4b5361;
+  --cvss-border-strong: #646b78;
   --cvss-text: #e7e9ee;
   --cvss-text-muted: #9aa2b1;
   --cvss-accent: #7aa2ff;
@@ -204,8 +204,13 @@
   min-width: 0;
 }
 
-.cvss-score[data-muted] .cvss-score-row {
+/* A score for a group with no metrics set: dim the number, show severity in muted text. */
+.cvss-score[data-muted] .cvss-score-number {
   opacity: 0.55;
+}
+
+.cvss-score[data-muted] .cvss-severity {
+  color: var(--cvss-text-muted);
 }
 
 .cvss-score-title {
@@ -482,4 +487,40 @@
 
 .cvss-table-wrap {
   overflow-x: auto;
+}
+
+/* Accessibility -------------------------------------------------------------- */
+
+/* Visually hidden, still read by screen readers. */
+.cvss-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Windows High Contrast and other forced-color modes replace background colors,
+   which would hide which option is selected. Use system colors instead. */
+@media (forced-colors: active) {
+  .cvss-option input:checked + span {
+    forced-color-adjust: none;
+    background: Highlight;
+    border-color: Highlight;
+    color: HighlightText;
+  }
+
+  .cvss-metric:disabled .cvss-option input:checked + span {
+    background: GrayText;
+    border-color: GrayText;
+    color: Canvas;
+  }
+
+  .cvss-severity {
+    border-color: CanvasText;
+  }
 }

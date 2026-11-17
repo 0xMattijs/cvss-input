@@ -194,7 +194,7 @@ describe('layers', () => {
     const table = screen.getByRole('table', { name: 'Metric sources' });
     const row = within(table).getByText('Exploit Code Maturity').closest('tr')!;
     expect(within(row).getByText('Threat feed')).toBeTruthy();
-    expect(row.querySelector('del')?.textContent).toBe('Base vector: U');
+    expect(row.querySelector('del')?.textContent).toBe('Overridden: Base vector: U');
     expect(within(table).getByText('Modified Attack Vector').closest('tr')!.textContent).toContain('Database server');
   });
 });

@@ -210,6 +210,24 @@ labels can't inject HTML. If you use the core or your own UI, follow these rules
 - **Issues are capped.** Each vector reports at most 20 issues; the rest are summarized in one
   `TOO_MANY_ISSUES` issue.
 
+## Accessibility
+
+The components aim for WCAG 2.2 AA:
+
+- The picker uses native radio buttons in labeled fieldsets: Tab moves between metrics, arrow keys change
+  the value, and every control shows a visible focus outline. Collapsed groups open with Enter or Space.
+- Errors are linked to the text field with `aria-describedby`. A polite status message summarizes the
+  result, such as "Base 9.8 Critical." or "2 problems. …", after typing pauses, instead of announcing
+  every keystroke.
+- Notes about other layers are linked to their metric's radio group, and overridden values in
+  `CvssCombined` are labeled for screen readers.
+- Text meets 4.5:1 contrast and control borders and focus outlines meet 3:1, in light and dark mode.
+  Severity is always shown as text, not only as color.
+- In forced-colors modes such as Windows High Contrast, selected options use system highlight colors.
+
+`test/a11y.test.tsx` runs axe-core on every component state, and `test/contrast.test.ts` checks the color
+tokens. If you override `--cvss-*` colors, check their contrast too.
+
 ## Scoring notes
 
 - **4.0** is ported from the [FIRST reference calculator](https://github.com/FIRSTdotorg/cvss-v4-calculator)

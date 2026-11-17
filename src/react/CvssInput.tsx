@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { ALL_VERSIONS, GROUP_LABELS, VERSIONS } from '../core/definitions';
 import { DEFAULT_MAX_LENGTH, evaluate, serialize } from '../core/evaluate';
 import { evaluateLayers } from '../core/layers';
@@ -306,7 +306,8 @@ export function CvssInput({
         </div>
       )}
 
-      <ul id={issuesId} className="cvss-issues" aria-live="polite">
+      {/* Not a live region: it changes on every keystroke. The status below summarizes instead. */}
+      <ul id={issuesId} className="cvss-issues">
         {showIssues &&
           shownIssues.map((issue, n) => (
             <IssueItem
@@ -329,6 +330,7 @@ export function CvssInput({
       )}
 
       <ScorePanel scores={scores} />
+      <Announcer message={isEmpty && !overlay ? '' : statusMessage(scores, shownIssues)} />
 
       {layered?.combined && contextLayers.length > 0 && (
         <div className="cvss-meta">
@@ -590,7 +592,7 @@ export function MetricPicker({
           >
             <summary>
               {GROUP_LABELS[group]}
-              {readOnlyGroup && <span className="cvss-group-note">from base vector</span>}
+              {readOnlyGroup && <span className="cvss-group-note"> (from base vector)</span>}
             </summary>
             <div className="cvss-metrics">
               {groupMetrics.map((m) => {
@@ -609,6 +611,7 @@ export function MetricPicker({
                     key={m.key}
                     className="cvss-metric"
                     disabled={disabled || blocked || readOnlyGroup}
+                    aria-describedby={others.length > 0 ? `${id}-${m.key}-context` : undefined}
                   >
                     <legend>
                       {m.name} <abbr className="cvss-metric-key">{m.key}</abbr>
@@ -628,7 +631,7 @@ export function MetricPicker({
                       ))}
                     </div>
                     {others.length > 0 && (
-                      <div className="cvss-context">
+                      <div className="cvss-context" id={`${id}-${m.key}-context`}>
                         {others.map((o) => (
                           <span key={o.label} className="cvss-context-item" data-applied={o.applied || undefined}>
                             {o.label}: {m.values.find((v) => v.code === o.value)?.name ?? o.value}
@@ -649,6 +652,41 @@ export function MetricPicker({
           </details>
         );
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+/** One-line summary for screen readers: the scores, or the number of problems. */
+export function statusMessage(scores: CvssScores | null, issues: CvssIssue[]): string {
+  const errors = issues.filter((i) => i.severity === 'error');
+  if (errors.length > 0) {
+    const count = errors.some((i) => i.code === 'TOO_MANY_ISSUES') ? 'More than 20 problems' : `${errors.length} ${errors.length === 1 ? 'problem' : 'problems'}`;
+    return `${count}. ${errors[0].message}`;
+  }
+  if (!scores) return '';
+  const fmt = (v: ScoreValue) => `${v.score.toFixed(1)} ${v.severity}`;
+  if (scores.kind === 'v4') return `${scores.nomenclature} ${fmt(scores.score)}.`;
+  const parts = [`Base ${fmt(scores.base)}`];
+  if (scores.temporalDefined) parts.push(`Temporal ${fmt(scores.temporal)}`);
+  if (scores.environmentalDefined) parts.push(`Environmental ${fmt(scores.environmental)}`);
+  return parts.join(', ') + '.';
+}
+
+/**
+ * Announces a message politely once it has been stable for a moment, so screen
+ * readers hear the result after typing pauses instead of on every keystroke.
+ */
+function Announcer({ message, delay = 800 }: { message: string; delay?: number }) {
+  const [spoken, setSpoken] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSpoken(message), delay);
+    return () => clearTimeout(timer);
+  }, [message, delay]);
+  return (
+    <div className="cvss-sr-only" role="status" aria-live="polite" aria-atomic="true">
+      {spoken}
     </div>
   );
 }

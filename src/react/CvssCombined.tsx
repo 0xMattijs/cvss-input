@@ -146,6 +146,7 @@ export function CvssCombined({
                     {override?.overridden.map((o) => (
                       <div key={o.layer}>
                         <del>
+                          <span className="cvss-sr-only">Overridden: </span>
                           {labels[o.layer] ?? o.layer}: <code>{o.value}</code>
                         </del>
                       </div>
