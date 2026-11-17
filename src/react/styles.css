@@ -136,6 +136,8 @@
   white-space: pre;
   color: transparent;
   pointer-events: none;
+  /* Inputs hide scrolled text in their padding; hide the marks there too. */
+  clip-path: inset(0 11px);
 }
 
 .cvss-mark {
