@@ -113,7 +113,7 @@ describe('message catalogs', () => {
   it('writes the screen reader summary in Dutch', () => {
     const scores = evaluate(V31 + '/E:P/CR:L').scores;
     expect(statusMessage(scores, [], nl)).toBe(
-      'Eindscore 9,0 Kritiek (Omgeving). Basis 9,8 Kritiek, Tijdelijk 9,3 Kritiek, Omgeving 9,0 Kritiek.',
+      'Eindscore 9,0 Kritiek (Omgeving). Basis 9,8 Kritiek, Temporaal 9,3 Kritiek, Omgeving 9,0 Kritiek.',
     );
     const { issues } = evaluate('CVSS:3.1/AV:Q');
     expect(statusMessage(null, issues, nl)).toMatch(/^\d+ problemen\. "Q" is geen geldige waarde/);
@@ -166,7 +166,7 @@ describe('components in Dutch', () => {
         messages={nl}
       />,
     );
-    const table = screen.getByRole('table', { name: 'Herkomst van de metrieken' });
+    const table = screen.getByRole('table', { name: 'Herkomst van de metrics' });
     const row = within(table).getByText('Volwassenheid van exploitcode').closest('tr')!;
     expect(row.textContent).toContain('Hoog');
     expect(row.textContent).toContain('Overschreven: Basisvector: U');

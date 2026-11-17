@@ -109,7 +109,7 @@ export const nl: CvssMessages = {
   severity: { None: 'Geen', Low: 'Laag', Medium: 'Gemiddeld', High: 'Hoog', Critical: 'Kritiek' },
   groups: {
     base: 'Basis',
-    temporal: 'Tijdelijk',
+    temporal: 'Temporaal',
     threat: 'Dreiging',
     environmental: 'Omgeving',
     supplemental: 'Aanvullend',
@@ -131,17 +131,17 @@ export const nl: CvssMessages = {
         ? `De vector is CVSS ${p.found}, maar de basisvector is CVSS ${p.expected}.`
         : `De vector is CVSS ${p.found}, maar CVSS ${p.expected} is vereist.`,
     MALFORMED_SEGMENT: (p) =>
-      p.raw === '' ? 'De vector bevat een leeg deel ("//").' : `"${p.raw}" is geen paar "metriek:waarde".`,
-    UNKNOWN_METRIC: (p) => `"${p.key}" is geen metriek van CVSS ${p.version}.`,
+      p.raw === '' ? 'De vector bevat een leeg deel ("//").' : `"${p.raw}" is geen paar "metric:waarde".`,
+    UNKNOWN_METRIC: (p) => `"${p.key}" is geen metric van CVSS ${p.version}.`,
     INVALID_VALUE: (p, f) =>
       `"${p.value}" is geen geldige waarde voor ${p.key} (${f.metric(p.version, p.key)}). Geldige waarden: ${list(p.valid)}.`,
     DUPLICATE_METRIC: (p) => `${p.key} komt meer dan één keer voor.`,
     MISSING_METRIC: (p, f) => `${p.key} (${f.metric(p.version, p.key)}) ontbreekt.`,
     METRIC_ORDER: (p) =>
       p.strict
-        ? `De metrieken staan niet in de volgorde van de CVSS ${p.version}-specificatie.`
-        : 'De metrieken staan niet in de standaardvolgorde. Bij het normaliseren worden ze gesorteerd.',
-    BASE_METRIC_IN_OVERLAY: (p) => `"${p.key}" is een basismetriek. Basismetrieken komen uit de basisvector.`,
+        ? `De metrics staan niet in de volgorde van de CVSS ${p.version}-specificatie.`
+        : 'De metrics staan niet in de standaardvolgorde. Bij het normaliseren worden ze gesorteerd.',
+    BASE_METRIC_IN_OVERLAY: (p) => `"${p.key}" is een basismetric. Basismetrics komen uit de basisvector.`,
     INVALID_BASE_VECTOR: (p, f) =>
       p.issues === null
         ? 'De basisvector is ongeldig, dus de lagen kunnen niet worden gecombineerd.'
@@ -152,10 +152,10 @@ export const nl: CvssMessages = {
         : `${p.key} heeft verschillende waarden: ${list(p.values.map((v) => `${f.layer(v.layer)} ${p.key}:${v.value}`))}.`,
     METRIC_NOT_ALLOWED_IN_LAYER: (p, f) =>
       p.kind === 'metric'
-        ? `${f.layer(p.layer)} mag ${p.key} niet instellen; deze laag accepteert alleen metrieken uit: ${list(p.allowed.map(f.group))}.`
-        : `${f.layer(p.layer)} heeft beveiligingseisen, maar accepteert geen omgevingsmetrieken.`,
+        ? `${f.layer(p.layer)} mag ${p.key} niet instellen; deze laag accepteert alleen metrics uit: ${list(p.allowed.map(f.group))}.`
+        : `${f.layer(p.layer)} heeft beveiligingseisen, maar accepteert geen omgevingsmetrics.`,
     MISSING_LAYER_VECTOR: (p, f) =>
-      `${f.layer(p.layer)} heeft geen metrieken voor CVSS ${p.family}${p.hasRequirements ? '; alleen de beveiligingseisen tellen mee' : ''}.`,
+      `${f.layer(p.layer)} heeft geen metrics voor CVSS ${p.family}${p.hasRequirements ? '; alleen de beveiligingseisen tellen mee' : ''}.`,
     INVALID_REQUIREMENTS: (p, f) => `${f.layer(p.layer)} heeft ongeldige beveiligingseisen. Gebruik L, M, H of X.`,
     DUPLICATE_LAYER_ID: (p) =>
       p.reserved
@@ -168,7 +168,7 @@ export const nl: CvssMessages = {
   },
   ui: {
     vectorLabel: 'CVSS-vector',
-    overlayLabel: 'Tijdelijke en omgevingsmetrieken',
+    overlayLabel: 'Temporale en omgevingsmetrics',
     thisInput: 'Deze invoer',
     baseVector: 'Basisvector',
     version: 'Versie',
@@ -183,7 +183,7 @@ export const nl: CvssMessages = {
     goToPosition: (n) => `Ga naar positie ${n}`,
     position: (n) => `(positie ${n})`,
     treatAs: (v) => `Behandelen als CVSS ${v}`,
-    pickerUnavailable: 'Voer een geldige vector in of stel een versie in om de metriekkiezer te gebruiken.',
+    pickerUnavailable: 'Voer een geldige vector in of stel een versie in om de metrickiezer te gebruiken.',
     pickerBlocked: 'Los de fouten in de vector op om hem met de kiezer te bewerken.',
     groupFromBase: '(uit basisvector)',
     contextValue: (layer, value, applied) => `${layer}: ${value} (${applied ? 'toegepast' : 'niet toegepast'})`,
@@ -191,12 +191,12 @@ export const nl: CvssMessages = {
     conflictsWithLayer: 'Conflicteert met een andere laag.',
     score: 'Score',
     base: 'Basis',
-    temporal: 'Tijdelijk',
+    temporal: 'Temporaal',
     environmental: 'Omgeving',
     final: 'Eindscore',
     baseDetail: (impact, exploitability) => `Impact ${impact} · Exploiteerbaarheid ${exploitability}`,
-    noTemporal: 'Geen tijdelijke metrieken ingesteld',
-    noEnvironmental: 'Geen omgevingsmetrieken ingesteld',
+    noTemporal: 'Geen temporale metrics ingesteld',
+    noEnvironmental: 'Geen omgevingsmetrics ingesteld',
     macroVector: (mv) => `MacroVector ${mv}`,
     statusProblems: (count, capped, first) =>
       `${capped ? `Meer dan ${count} problemen` : `${count} ${count === 1 ? 'probleem' : 'problemen'}`}. ${first}`,
@@ -204,8 +204,8 @@ export const nl: CvssMessages = {
     statusFinal: (score, severity, group) => `Eindscore ${score} ${severity} (${group}).`,
     statusScores: (parts) => `${parts.join(', ')}.`,
     combinedScore: 'Gecombineerde CVSS-score',
-    sources: 'Herkomst van de metrieken',
-    sourcesMetric: 'Metriek',
+    sources: 'Herkomst van de metrics',
+    sourcesMetric: 'Metric',
     sourcesValue: 'Waarde',
     sourcesSource: 'Bron',
     conflict: 'Conflict',
