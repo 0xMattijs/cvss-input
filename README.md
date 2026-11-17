@@ -205,6 +205,24 @@ npm run build     # dist/ with ESM, CJS, types, and styles.css
 npm run dev       # demo page
 ```
 
+CI runs the typecheck, tests, and build on Node 22 and 24 with React 18 and 19 for every push to
+`master` and every pull request.
+
+### Release
+
+The release workflow publishes to npm with [trusted publishing](https://docs.npmjs.com/trusted-publishers),
+so no npm token is stored in GitHub, and npm shows a provenance link to the commit.
+
+1. Update `version` in `package.json` and commit.
+2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+
+The workflow fails if the tag doesn't match `package.json`.
+
+One-time setup on npmjs.com, under the package's **Settings → Trusted publisher**: choose GitHub Actions
+and enter owner `0xMattijs`, repository `cvss-input`, workflow `release.yml`, and environment `npm`.
+
+### Tests
+
 The differential tests score 5,000 random vectors per version and compare them with
 [ae-cvss-calculator](https://www.npmjs.com/package/ae-cvss-calculator). Base, Temporal, and Environmental
 scores for 3.0 and 3.1, and all 4.0 scores, must match exactly. For 2.0, only Base must match exactly:
