@@ -21,7 +21,7 @@ interface Tokenized {
   /** Version named by the prefix, if any. */
   prefixVersion: CvssVersion | null;
   /** True if the prefix is a recognized but non-standard form, like `CVSS2#`. */
-  nonstandardPrefix: boolean;
+  nonstandardPrefix: { start: number; end: number } | null;
   unknownPrefix: { text: string; start: number; end: number } | null;
   segments: Segment[];
   malformed: Array<{ raw: string; start: number; end: number }>;
@@ -33,7 +33,7 @@ const PREFIX_RE = /^CVSS:(\d+\.\d+)$/;
 export function tokenize(input: string): Tokenized {
   const out: Tokenized = {
     prefixVersion: null,
-    nonstandardPrefix: false,
+    nonstandardPrefix: null,
     unknownPrefix: null,
     segments: [],
     malformed: [],
@@ -51,7 +51,7 @@ export function tokenize(input: string): Tokenized {
   // `CVSS2#AV:N/...` is an old NVD form of a 2.0 vector.
   if (input.startsWith('CVSS2#', start)) {
     out.prefixVersion = '2.0';
-    out.nonstandardPrefix = true;
+    out.nonstandardPrefix = { start, end: start + 'CVSS2#'.length };
     start += 'CVSS2#'.length;
   }
 
@@ -79,7 +79,7 @@ export function tokenize(input: string): Tokenized {
         out.prefixVersion = version;
       } else if (version === '2.0') {
         out.prefixVersion = '2.0';
-        out.nonstandardPrefix = true;
+        out.nonstandardPrefix = { start: segStart, end: slash };
       } else {
         out.unknownPrefix = { text: raw, start: segStart, end: slash };
       }
@@ -261,6 +261,8 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
       severity: 'warning',
       code: 'NONSTANDARD_PREFIX',
       message: 'CVSS 2.0 vectors have no prefix. The prefix is removed on normalization.',
+      start: t.nonstandardPrefix.start,
+      end: t.nonstandardPrefix.end,
     });
   }
 

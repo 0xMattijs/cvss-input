@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ALL_VERSIONS, GROUP_LABELS, VERSIONS } from '../core/definitions';
 import { DEFAULT_MAX_LENGTH, evaluate, serialize } from '../core/evaluate';
 import { evaluateLayers } from '../core/layers';
@@ -242,6 +242,44 @@ export function CvssInput({
   );
   const showIssues = !isEmpty || overlay;
 
+  // Issues with a character range in this field, marked in the text and linked from the list.
+  const ownRanged = shownIssues.filter(
+    (i) =>
+      (!i.layer || i.layer === ownLayerId) &&
+      i.start !== undefined &&
+      i.end !== undefined &&
+      i.end > i.start &&
+      i.end <= text.length &&
+      text.length <= maxLength,
+  );
+  const inputRef = useRef<HTMLInputElement>(null);
+  const marksRef = useRef<HTMLDivElement>(null);
+  // The marks sit behind the input, so they follow its horizontal scroll.
+  const syncMarks = useCallback(() => {
+    if (inputRef.current && marksRef.current) marksRef.current.scrollLeft = inputRef.current.scrollLeft;
+  }, []);
+  useLayoutEffect(syncMarks);
+  const selectRange = (issue: CvssIssue) => {
+    const el = inputRef.current;
+    if (!el || disabled) return;
+    el.focus();
+    el.setSelectionRange(issue.start!, issue.end!);
+    // Browsers don't scroll to a selection set from code, so bring the range into view.
+    const mark = [...(marksRef.current?.querySelectorAll<HTMLElement>('.cvss-mark') ?? [])].find((m) => {
+      const at = Number(m.dataset.start);
+      return at >= issue.start! && at < issue.end!;
+    });
+    if (mark) {
+      const pad = 10;
+      const left = mark.offsetLeft - pad;
+      const right = mark.offsetLeft + mark.offsetWidth + pad - el.clientWidth;
+      if (el.scrollLeft > left) el.scrollLeft = Math.max(0, left);
+      else if (el.scrollLeft < right) el.scrollLeft = right;
+    }
+    syncMarks();
+  };
+  const canSelect = mode !== 'picker' && !disabled;
+
   // Picker context: values other layers set for each metric.
   const context = useMemo(() => {
     if (!layered) return null;
@@ -273,7 +311,22 @@ export function CvssInput({
           <label className="cvss-label" htmlFor={inputId}>
             {label ?? (overlay ? (ownLayer?.label ?? 'Temporal and environmental metrics') : 'CVSS vector')}
           </label>
+          <div className="cvss-text-wrap">
+            <div className="cvss-text-marks" ref={marksRef} aria-hidden="true">
+              {showIssues &&
+                markSegments(text, ownRanged).map((seg, n) =>
+                  seg.severity ? (
+                    <span key={n} className="cvss-mark" data-severity={seg.severity} data-start={seg.start}>
+                      {seg.text}
+                    </span>
+                  ) : (
+                    seg.text
+                  ),
+                )}
+              {' '}
+            </div>
           <input
+            ref={inputRef}
             id={inputId}
             className="cvss-text"
             type="text"
@@ -289,7 +342,10 @@ export function CvssInput({
             aria-describedby={issuesId}
             onChange={(e) => emit(e.target.value)}
             onBlur={handleBlur}
+            onScroll={syncMarks}
+            onSelect={syncMarks}
           />
+          </div>
         </div>
       )}
 
@@ -313,8 +369,9 @@ export function CvssInput({
             <IssueItem
               key={n}
               issue={issue}
-              input={text}
               layerLabel={issue.layer && issue.layer !== ownLayerId ? labels[issue.layer] : undefined}
+              ranged={ownRanged.includes(issue)}
+              onSelectRange={canSelect ? () => selectRange(issue) : undefined}
             />
           ))}
       </ul>
@@ -405,23 +462,66 @@ function VersionLine({
   );
 }
 
-function IssueItem({ issue, input, layerLabel }: { issue: CvssIssue; input: string; layerLabel?: string }) {
-  const hasRange = !layerLabel && issue.start !== undefined && issue.end !== undefined && input.length >= issue.end;
+function IssueItem({
+  issue,
+  layerLabel,
+  ranged,
+  onSelectRange,
+}: {
+  issue: CvssIssue;
+  layerLabel?: string;
+  ranged: boolean;
+  onSelectRange?: () => void;
+}) {
+  const position = `position ${issue.start! + 1}`;
   return (
     <li className="cvss-issue" data-severity={issue.severity}>
       <span className="cvss-issue-kind">{issue.severity === 'error' ? 'Error' : 'Note'}</span>
       <span>
         {layerLabel && <strong>{layerLabel}: </strong>}
         {issue.message}
-        {hasRange && (
+        {ranged && (
           <>
             {' '}
-            <span className="cvss-issue-pos">(position {issue.start! + 1})</span>
+            {onSelectRange ? (
+              <button type="button" className="cvss-issue-pos" onClick={onSelectRange}>
+                Go to {position}
+              </button>
+            ) : (
+              <span className="cvss-issue-pos">({position})</span>
+            )}
           </>
         )}
       </span>
     </li>
   );
+}
+
+/** Splits the text into runs, each marked with the most severe issue covering it. */
+export function markSegments(
+  text: string,
+  issues: CvssIssue[],
+): Array<{ text: string; start: number; severity: 'error' | 'warning' | null }> {
+  const cuts = new Set([0, text.length]);
+  for (const i of issues) {
+    cuts.add(i.start!);
+    cuts.add(i.end!);
+  }
+  const points = [...cuts].filter((c) => c >= 0 && c <= text.length).sort((a, b) => a - b);
+  const out: Array<{ text: string; start: number; severity: 'error' | 'warning' | null }> = [];
+  for (let n = 0; n + 1 < points.length; n++) {
+    const [from, to] = [points[n], points[n + 1]];
+    const covering = issues.filter((i) => i.start! <= from && i.end! >= to);
+    const severity = covering.some((i) => i.severity === 'error')
+      ? 'error'
+      : covering.length > 0
+        ? 'warning'
+        : null;
+    const last = out[out.length - 1];
+    if (last && last.severity === severity) last.text += text.slice(from, to);
+    else out.push({ text: text.slice(from, to), start: from, severity });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

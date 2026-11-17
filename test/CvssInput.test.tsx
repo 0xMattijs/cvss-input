@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CvssCombined, CvssInput } from '../src';
+import { CvssCombined, CvssInput, evaluate } from '../src';
+import { markSegments } from '../src/react/CvssInput';
 import type { CvssLayer } from '../src';
 
 afterEach(cleanup);
@@ -212,5 +213,59 @@ describe('layers', () => {
     expect(within(row).getByText('Threat feed')).toBeTruthy();
     expect(row.querySelector('del')?.textContent).toBe('Overridden: Base vector: U');
     expect(within(table).getByText('Modified Attack Vector').closest('tr')!.textContent).toContain('Database server');
+  });
+});
+
+describe('issue marks in the text field', () => {
+  const marks = () => [...document.querySelectorAll('.cvss-mark')].map((m) => [m.getAttribute('data-severity'), m.textContent]);
+
+  it('splits text into runs by the most severe covering issue', () => {
+    const issue = (severity: 'error' | 'warning', start: number, end: number) =>
+      ({ severity, start, end, code: 'INVALID_VALUE', message: '' }) as const;
+    expect(markSegments('abcdefgh', [issue('warning', 1, 5), issue('error', 3, 6)])).toEqual([
+      { text: 'a', start: 0, severity: null },
+      { text: 'bc', start: 1, severity: 'warning' },
+      { text: 'def', start: 3, severity: 'error' },
+      { text: 'gh', start: 6, severity: null },
+    ]);
+    expect(markSegments('abc', [])).toEqual([{ text: 'abc', start: 0, severity: null }]);
+  });
+
+  it('marks the ranges of errors in the vector', () => {
+    const vector = 'CVSS:3.1/AV:Q/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/XX:1';
+    render(<CvssInput defaultValue={vector} />);
+    const ranged = evaluate(vector).issues.filter((i) => i.start !== undefined);
+    expect(ranged.length).toBe(2);
+    expect(marks()).toEqual(ranged.map((i) => ['error', vector.slice(i.start, i.end)]));
+    // The copy behind the input holds the full text, so the marks line up with it.
+    expect(document.querySelector('.cvss-text-marks')!.textContent).toBe(vector + ' ');
+  });
+
+  it('marks warnings with a range, such as a nonstandard prefix', () => {
+    render(<CvssInput defaultValue="CVSS2#AV:N/AC:L/Au:N/C:P/I:P/A:P" />);
+    expect(marks()).toEqual([['warning', 'CVSS2#']]);
+    cleanup();
+    render(<CvssInput defaultValue="CVSS:2.0/AV:N/AC:L/Au:N/C:P/I:P/A:P" />);
+    expect(marks()).toEqual([['warning', 'CVSS:2.0']]);
+  });
+
+  it('has no marks for a valid vector', () => {
+    render(<CvssInput defaultValue={V31} />);
+    expect(marks()).toEqual([]);
+  });
+
+  it('selects the bad part of the vector from the issue list', () => {
+    const vector = 'CVSS:3.1/AV:Q/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H';
+    render(<CvssInput defaultValue={vector} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Go to position 10' }));
+    const input = textbox();
+    expect(document.activeElement).toBe(input);
+    expect(vector.slice(input.selectionStart!, input.selectionEnd!)).toBe('AV:Q');
+  });
+
+  it('shows the position as text when the field is disabled', () => {
+    render(<CvssInput defaultValue="CVSS:3.1/AV:Q/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" disabled />);
+    expect(screen.queryByRole('button', { name: /^Go to position/ })).toBeNull();
+    expect(screen.getByText('(position 10)')).toBeTruthy();
   });
 });

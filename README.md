@@ -194,6 +194,9 @@ a conflict rule switch, and a vulnerability × asset score matrix, see
 
 Metric keys and values are case sensitive, as in the specifications.
 
+The text field marks each issue that has a character range: errors get a wavy red underline, warnings a
+dotted amber one. In the issue list, **Go to position N** selects that part of the vector in the field.
+
 ## Security
 
 The components render all text through React, which escapes it, so vectors, error messages, and layer
@@ -220,13 +223,17 @@ The components aim for WCAG 2.2 AA:
 - The picker uses native radio buttons in labeled fieldsets: Tab moves between metrics, arrow keys change
   the value, and every control shows a visible focus outline. Collapsed groups open with Enter or Space.
 - Errors are linked to the text field with `aria-describedby`. A polite status message summarizes the
-  result, such as "Base 9.8 Critical." or "2 problems. …", after typing pauses, instead of announcing
-  every keystroke.
+  result, such as "Final 9.8 Critical (Base)." or "2 problems. …", after typing pauses, instead of
+  announcing every keystroke.
+- The underlines in the text field are decoration only. Each issue in the list has a
+  **Go to position N** button that moves focus to the field and selects the bad part, so keyboard and
+  screen reader users reach the same place.
 - Notes about other layers are linked to their metric's radio group, and overridden values in
   `CvssCombined` are labeled for screen readers.
 - Text meets 4.5:1 contrast and control borders and focus outlines meet 3:1, in light and dark mode.
   Severity is always shown as text, not only as color.
-- In forced-colors modes such as Windows High Contrast, selected options use system highlight colors.
+- In forced-colors modes such as Windows High Contrast, selected options and issue underlines use
+  system highlight colors.
 
 `test/a11y.test.tsx` runs axe-core on every component state, and `test/contrast.test.ts` checks the color
 tokens. If you override `--cvss-*` colors, check their contrast too.

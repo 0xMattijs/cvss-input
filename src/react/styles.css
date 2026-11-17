@@ -101,15 +101,61 @@
   font-weight: 600;
 }
 
-.cvss-text {
+/* The input is transparent over a copy of its text that carries the issue marks. */
+.cvss-text-wrap {
+  position: relative;
+  background: var(--cvss-bg);
+  border-radius: var(--cvss-radius);
+}
+
+.cvss-text,
+.cvss-text-marks {
   width: 100%;
+  box-sizing: border-box;
   font-family: var(--cvss-mono);
   font-size: 13px;
+  line-height: 20px;
+  letter-spacing: normal;
   padding: 8px 10px;
-  color: var(--cvss-text);
-  background: var(--cvss-bg);
-  border: 1px solid var(--cvss-border-strong);
+  border: 1px solid transparent;
   border-radius: var(--cvss-radius);
+}
+
+.cvss-text {
+  position: relative;
+  margin: 0;
+  color: var(--cvss-text);
+  background: transparent;
+  border-color: var(--cvss-border-strong);
+}
+
+.cvss-text-marks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: pre;
+  color: transparent;
+  pointer-events: none;
+}
+
+.cvss-mark {
+  border-radius: 2px;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+.cvss-mark[data-severity='error'] {
+  background: var(--cvss-error-bg);
+  text-decoration-color: var(--cvss-error);
+}
+
+.cvss-mark[data-severity='warning'] {
+  background: var(--cvss-warning-bg);
+  text-decoration-color: var(--cvss-warning);
+  text-decoration-style: dotted;
 }
 
 .cvss-text:focus-visible {
@@ -184,8 +230,24 @@
 }
 
 .cvss-issue-pos {
-  opacity: 0.8;
   white-space: nowrap;
+}
+
+button.cvss-issue-pos {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+button.cvss-issue-pos:focus-visible {
+  outline: 2px solid var(--cvss-focus);
+  outline-offset: 1px;
+  border-radius: 2px;
 }
 
 /* Scores ------------------------------------------------------------------- */
@@ -524,6 +586,16 @@
 /* Windows High Contrast and other forced-color modes replace background colors,
    which would hide which option is selected. Use system colors instead. */
 @media (forced-colors: active) {
+  /* Keep the copied text invisible and the underline visible. */
+  .cvss-text-marks {
+    forced-color-adjust: none;
+  }
+
+  .cvss-mark[data-severity] {
+    background: transparent;
+    text-decoration-color: Highlight;
+  }
+
   .cvss-option input:checked + span {
     forced-color-adjust: none;
     background: Highlight;

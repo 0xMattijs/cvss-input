@@ -63,6 +63,11 @@ const pairs: Pair[] = [
   // Scores for groups with no metrics set: the number at 55% opacity, severity in muted text.
   ['unset score number (26px bold)', 'text', 'surface', LARGE, 0.55],
   ['unset score severity', 'text-muted', 'surface', TEXT],
+  // Marked ranges in the text field: vector text on the tint, and the underline.
+  ['text in an error mark', 'text', 'error-bg', TEXT],
+  ['text in a warning mark', 'text', 'warning-bg', TEXT],
+  ['error mark underline', 'error', 'error-bg', UI],
+  ['warning mark underline', 'warning', 'warning-bg', UI],
   ['option and input borders', 'border-strong', 'bg', UI],
   ['selected option fill', 'accent', 'bg', UI],
   ['focus outline', 'focus', 'bg', UI],
