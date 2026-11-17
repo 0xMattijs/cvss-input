@@ -2,7 +2,27 @@
   "name": "cvss-input",
   "version": "0.1.0",
   "description": "React component and scoring core for CVSS 2.0, 3.0, 3.1, and 4.0 vectors",
+  "keywords": [
+    "cvss",
+    "cvss4",
+    "cvss3",
+    "cvss2",
+    "vulnerability",
+    "security",
+    "score",
+    "calculator",
+    "react"
+  ],
+  "homepage": "https://github.com/0xMattijs/cvss-input#readme",
+  "bugs": {
+    "url": "https://github.com/0xMattijs/cvss-input/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xMattijs/cvss-input.git"
+  },
   "license": "MIT",
+  "author": "Mattijs van Ommeren",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -24,13 +44,15 @@
     "./styles.css": "./dist/styles.css"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup && node scripts/postbuild.mjs",
     "dev": "vite --config demo/vite.config.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "peerDependencies": {
     "react": ">=18"
