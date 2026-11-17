@@ -13,10 +13,26 @@ export interface MetricDef {
   key: string;
   name: string;
   group: MetricGroup;
+  /**
+   * Values in the order of the official calculator: FIRST's for 3.0, 3.1, and
+   * 4.0, NVD's for 2.0. "Not defined" comes first.
+   */
   values: MetricValueDef[];
+  /**
+   * Whether `values` (apart from "not defined") runs from least to most severe
+   * (`ascending`) or the reverse (`descending`).
+   */
+  severity: 'ascending' | 'descending';
   /** Base metrics are mandatory; every other metric has a "not defined" value. */
   required: boolean;
 }
+
+/**
+ * Order of the values in the picker: `first` follows the official calculator
+ * (FIRST, or NVD for 2.0); `ascending` puts the least severe value first, for
+ * example None → High; `descending` the most severe. "Not defined" stays first.
+ */
+export type ValueOrder = 'first' | 'ascending' | 'descending';
 
 export interface VersionDef {
   version: CvssVersion;

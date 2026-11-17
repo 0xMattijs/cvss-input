@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ALL_VERSIONS, GROUP_LABELS, VERSIONS } from '../core/definitions';
+import { ALL_VERSIONS, GROUP_LABELS, VERSIONS, orderedValues } from '../core/definitions';
 import { DEFAULT_MAX_LENGTH, evaluate, serialize } from '../core/evaluate';
 import { evaluateLayers } from '../core/layers';
 import type {
@@ -13,6 +13,7 @@ import type {
   LayeredResult,
   MetricGroup,
   ScoreValue,
+  ValueOrder,
   VersionMode,
 } from '../core/types';
 import { useCvss } from './useCvss';
@@ -64,6 +65,12 @@ export interface CvssInputProps {
   mode?: 'text' | 'picker' | 'both';
   /** Version the picker uses for an empty vector in auto mode. Default: `4.0`. */
   defaultPickerVersion?: CvssVersion;
+  /**
+   * Order of each metric's values in the picker: `first` (default) follows the
+   * official calculator (FIRST, or NVD for 2.0); `ascending` puts the least
+   * severe value first, such as None → High; `descending` the most severe.
+   */
+  valueOrder?: ValueOrder;
   readOnly?: boolean;
   disabled?: boolean;
   /** Label for the text field. */
@@ -159,6 +166,7 @@ export function CvssInput({
   normalizeOnBlur = !strict,
   mode = 'both',
   defaultPickerVersion = '4.0',
+  valueOrder = 'first',
   readOnly = false,
   disabled = false,
   label,
@@ -406,6 +414,7 @@ export function CvssInput({
           onSelect={setMetric}
           allowedGroups={ownLayer?.groups ?? null}
           context={context}
+          valueOrder={valueOrder}
           versionChoice={
             !overlay && version === 'auto' && isEmpty
               ? { value: emptyVersion, onChange: setEmptyVersion }
@@ -626,6 +635,7 @@ export function MetricPicker({
   versionChoice,
   allowedGroups = null,
   context = null,
+  valueOrder = 'first',
 }: {
   version: CvssVersion | null;
   metrics: Record<string, string>;
@@ -644,6 +654,8 @@ export function MetricPicker({
     provenance: Record<string, string>;
     labelOf: (layer: string) => string;
   } | null;
+  /** Order of each metric's values. See `CvssInputProps.valueOrder`. */
+  valueOrder?: ValueOrder;
 }) {
   const id = useId();
   const groups = useMemo(() => {
@@ -727,7 +739,7 @@ export function MetricPicker({
                       {m.name} <abbr className="cvss-metric-key">{m.key}</abbr>
                     </legend>
                     <div className="cvss-options">
-                      {m.values.map((v) => (
+                      {orderedValues(m, valueOrder).map((v) => (
                         <label key={v.code} className="cvss-option" title={`${m.key}:${v.code}`}>
                           <input
                             type="radio"

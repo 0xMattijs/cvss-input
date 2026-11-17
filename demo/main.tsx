@@ -1,7 +1,7 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CvssInput } from '../src';
-import type { VersionMode } from '../src';
+import type { ValueOrder, VersionMode } from '../src';
 import '../src/react/styles.css';
 import './demo.css';
 import { LayeredExample } from './LayeredExample';
@@ -12,6 +12,7 @@ function Demo() {
   const [vector, setVector] = useState('CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N/E:P');
   const [version, setVersion] = useState<VersionMode>('auto');
   const [strict, setStrict] = useState(false);
+  const [valueOrder, setValueOrder] = useState<ValueOrder>('first');
   const [overlay, setOverlay] = useState('E:F/RL:O');
 
   return (
@@ -36,6 +37,14 @@ function Demo() {
           <label>
             <input type="checkbox" checked={strict} onChange={(e) => setStrict(e.target.checked)} /> Strict
           </label>
+          <label>
+            Value order{' '}
+            <select value={valueOrder} onChange={(e) => setValueOrder(e.target.value as ValueOrder)}>
+              <option value="first">As in FIRST calculator</option>
+              <option value="ascending">None → High</option>
+              <option value="descending">High → None</option>
+            </select>
+          </label>
         </div>
         <div className="samples">
           {[
@@ -51,7 +60,7 @@ function Demo() {
             </button>
           ))}
         </div>
-        <CvssInput value={vector} onChange={setVector} version={version} strict={strict} />
+        <CvssInput value={vector} onChange={setVector} version={version} strict={strict} valueOrder={valueOrder} />
       </section>
 
       <section>

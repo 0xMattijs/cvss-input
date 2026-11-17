@@ -50,9 +50,24 @@ import 'cvss-input/styles.css';
 | `normalizeOnBlur` | `!strict` | Rewrites a valid vector in canonical form when the text field loses focus. |
 | `mode` | `'both'` | `'text'`, `'picker'`, or `'both'`. |
 | `defaultPickerVersion` | `'4.0'` | Version the picker starts with for an empty vector in auto mode. |
+| `valueOrder` | `'first'` | Order of each metric's values in the picker. See [Value order](#value-order). |
 | `readOnly`, `disabled`, `label`, `className` | | Standard. |
 
 `ScorePanel` and `MetricPicker` are exported separately if you want to compose your own layout.
+
+### Value order
+
+`valueOrder` sets the order of each metric's values in the picker:
+
+| Value | Order | Example: 3.1 Attack Vector, Confidentiality |
+|---|---|---|
+| `'first'` (default) | As in FIRST's calculator for 3.0, 3.1, and 4.0, and NVD's for 2.0 | Network → Physical; None → High |
+| `'ascending'` | Least severe value first | Physical → Network; None → High |
+| `'descending'` | Most severe value first | Network → Physical; High → None |
+
+FIRST doesn't use one direction: in 3.1, Attack Vector starts with the most severe value and
+Confidentiality with the least severe. Not Defined always comes first. In the core, `orderedValues(metric,
+order)` returns the values in any of these orders.
 
 ## Use the core without React
 

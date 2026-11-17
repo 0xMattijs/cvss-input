@@ -269,3 +269,24 @@ describe('issue marks in the text field', () => {
     expect(screen.getByText('(position 10)')).toBeTruthy();
   });
 });
+
+describe('value order in the picker', () => {
+  const options = (name: RegExp) =>
+    within(screen.getByRole('group', { name })).getAllByRole('radio').map((r) => (r as HTMLInputElement).value);
+
+  it('follows the FIRST calculator by default', () => {
+    render(<CvssInput defaultValue={V31} />);
+    expect(options(/^Attack Vector/)).toEqual(['N', 'A', 'L', 'P']);
+    expect(options(/^Confidentiality C$/)).toEqual(['N', 'L', 'H']);
+  });
+
+  it('can put the least or most severe value first', () => {
+    render(<CvssInput defaultValue={V31} valueOrder="ascending" />);
+    expect(options(/^Attack Vector/)).toEqual(['P', 'L', 'A', 'N']);
+    expect(options(/^Confidentiality C$/)).toEqual(['N', 'L', 'H']);
+    cleanup();
+    render(<CvssInput defaultValue={V31} valueOrder="descending" />);
+    expect(options(/^Attack Vector/)).toEqual(['N', 'A', 'L', 'P']);
+    expect(options(/^Confidentiality C$/)).toEqual(['H', 'L', 'N']);
+  });
+});
