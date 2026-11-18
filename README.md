@@ -1,5 +1,7 @@
 # cvss-input
 
+[![npm](https://img.shields.io/npm/v/@alcyonsecurity/cvss-input)](https://www.npmjs.com/package/@alcyonsecurity/cvss-input)
+
 A React component and a framework-free scoring core for CVSS 2.0, 3.0, 3.1, and 4.0 vectors.
 
 **[Try the demo](https://0xmattijs.github.io/cvss-input/)**
