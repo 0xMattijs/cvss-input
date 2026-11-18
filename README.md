@@ -312,6 +312,8 @@ tokens. If you override `--cvss-*` colors, check their contrast too.
 
 ## Development
 
+To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```sh
 npm test          # unit, component, and differential tests
 npm run typecheck
