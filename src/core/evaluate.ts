@@ -187,6 +187,15 @@ export function capIssues(issues: CvssIssue[]): CvssIssue[] {
  * // { kind: 'classic', base: { score: 9.8, severity: 'Critical' }, ... }
  */
 export function evaluate(input: string, options: EvaluateOptions = {}): CvssResult {
+  return evaluateWithBase(input, options);
+}
+
+/**
+ * `evaluate`, with the base vector already evaluated. Internal: callers that evaluate several
+ * vectors against the same base pass `base` to avoid parsing and scoring it again. `base` must be
+ * `evaluate(options.baseVector, { version, strict, maxLength, v2Method })` with the same options.
+ */
+export function evaluateWithBase(input: string, options: EvaluateOptions = {}, preBase?: CvssResult): CvssResult {
   const { version: mode = 'auto', strict = false, baseVector, maxLength = DEFAULT_MAX_LENGTH, v2Method } = options;
   const overlay = baseVector !== undefined;
   const issues: CvssIssue[] = [];
@@ -215,7 +224,7 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
   // In overlay mode, the base vector decides the version.
   let base: CvssResult | null = null;
   if (overlay) {
-    base = evaluate(baseVector, { version: mode, strict, maxLength, v2Method });
+    base = preBase ?? evaluate(baseVector, { version: mode, strict, maxLength, v2Method });
     if (!base.valid || !base.version) {
       issues.push(makeIssue('INVALID_BASE_VECTOR', { issues: base.issues.filter(isErr) }, { severity: 'error' }));
       return result({});
