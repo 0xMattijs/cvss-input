@@ -34,8 +34,8 @@ approach.
    or `### Fixed`. Skip this step for changes that users don't notice, such as test or CI changes.
 6. Open a pull request against `master`.
 
-CI runs the same checks on Node 22 and 24 with React 18 and 19. All four jobs must pass before the pull
-request can merge.
+CI runs the same checks on Node 22 and 24 with React 18 and 19. Before the pull request can merge, all
+four jobs must pass and the repository owner must approve it.
 
 To try the component in a browser, run `npm run dev` to start the demo page.
 
