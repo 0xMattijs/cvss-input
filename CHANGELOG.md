@@ -10,6 +10,8 @@ workflow checks the entry and uses it as the GitHub release notes. Collect chang
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-18
+
 ### Fixed
 
 - A metric group no longer closes by itself when you clear its last metric.
