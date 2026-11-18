@@ -10,6 +10,8 @@ workflow checks the entry and uses it as the GitHub release notes. Collect chang
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-18
+
 ### Changed
 
 - `evaluateLayers` evaluates the base vector once instead of once per layer, which makes it about 40%

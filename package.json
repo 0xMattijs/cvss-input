@@ -1,6 +1,6 @@
 {
   "name": "@alcyonsecurity/cvss-input",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "React component and scoring core for CVSS 2.0, 3.0, 3.1, and 4.0 vectors",
   "keywords": [
     "cvss",
