@@ -38,7 +38,7 @@ First release.
   or most severe first.
 - `v2Method`: CVSS 2.0 Temporal and Environmental scores as NVD's calculator computes them (the
   default), or exactly as the specification describes.
-- A scoring core without React, exported as `cvss-input/core`.
+- A scoring core without React, exported as `@alcyonsecurity/cvss-input/core`.
 - Accessibility: native radio groups, a debounced status message for screen readers, WCAG 2.2 AA
   contrast in light and dark mode, and support for forced-colors mode.
 - Input limits: vectors longer than `maxLength` (1,024 characters by default) aren't parsed, and each

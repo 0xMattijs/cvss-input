@@ -13,12 +13,12 @@ A React component and a framework-free scoring core for CVSS 2.0, 3.0, 3.1, and 
 ## Install
 
 ```sh
-npm install cvss-input
+npm install @alcyonsecurity/cvss-input
 ```
 
 ```tsx
-import { CvssInput } from 'cvss-input';
-import 'cvss-input/styles.css';
+import { CvssInput } from '@alcyonsecurity/cvss-input';
+import '@alcyonsecurity/cvss-input/styles.css';
 ```
 
 ## Use the component
@@ -73,7 +73,7 @@ order)` returns the values in any of these orders.
 ## Use the core without React
 
 ```ts
-import { evaluate } from 'cvss-input/core';
+import { evaluate } from '@alcyonsecurity/cvss-input/core';
 
 const result = evaluate('CVSS:3.1/E:F/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H');
 result.valid;       // true
@@ -103,7 +103,7 @@ maturity to a threat feed, and security requirements to an asset. Store each par
 and combine them at scoring time.
 
 ```ts
-import { evaluateLayers } from 'cvss-input/core';
+import { evaluateLayers } from '@alcyonsecurity/cvss-input/core';
 
 const vulnerability = { cvss: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' };
 const asset = {
@@ -204,7 +204,7 @@ The components ship in English (`en`, the default) and Dutch (`nl`). Set the lan
 with a provider, or for one component with the `messages` prop:
 
 ```tsx
-import { CvssInput, CvssMessagesProvider, nl } from 'cvss-input';
+import { CvssInput, CvssMessagesProvider, nl } from '@alcyonsecurity/cvss-input';
 
 <CvssMessagesProvider messages={nl}>
   <App />
