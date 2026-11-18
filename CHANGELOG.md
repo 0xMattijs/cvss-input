@@ -10,6 +10,12 @@ workflow checks the entry and uses it as the GitHub release notes. Collect chang
 
 ## [Unreleased]
 
+### Changed
+
+- An incomplete vector, such as one being built in the picker, shows a single note with the required
+  metrics still to set instead of an error per missing metric, and the field isn't marked invalid.
+  Missing metrics are still listed as errors when the vector also has another error.
+
 ## [0.1.0] - 2026-11-18
 
 First release.

@@ -263,6 +263,13 @@ export function CvssInput({
     (i) => i.severity === 'error' && (result.issues.includes(i) || i.layer === ownLayerId),
   );
   const showIssues = !isEmpty || overlay;
+  // A vector whose only errors are required metrics not set yet isn't wrong: the user is
+  // still building it, in the picker or by typing. List what is left in one note instead
+  // of an error per metric, and don't mark the field invalid.
+  const missing = errors.filter((i) => i.code === 'MISSING_METRIC');
+  const incomplete = missing.length > 0 && missing.length === errors.length;
+  const listedIssues = incomplete ? shownIssues.filter((i) => !missing.includes(i)) : shownIssues;
+  const remaining = incomplete ? msg.ui.incomplete(missing.map((i) => i.metric!)) : null;
 
   // Issues with a character range in this field, marked in the text and linked from the list.
   const ownRanged = shownIssues.filter(
@@ -364,7 +371,7 @@ export function CvssInput({
             disabled={disabled}
             maxLength={maxLength}
             placeholder={placeholderFor(pickerVersion ?? defaultPickerVersion, overlay)}
-            aria-invalid={showIssues && errors.length > 0}
+            aria-invalid={showIssues && errors.length > 0 && !incomplete}
             aria-describedby={issuesId}
             onChange={(e) => emit(e.target.value)}
             onBlur={handleBlur}
@@ -390,8 +397,14 @@ export function CvssInput({
 
       {/* Not a live region: it changes on every keystroke. The status below summarizes instead. */}
       <ul id={issuesId} className="cvss-issues">
+        {showIssues && remaining && (
+          <li className="cvss-issue" data-severity="info">
+            <span className="cvss-issue-kind">{msg.ui.note}</span>
+            <span>{remaining}</span>
+          </li>
+        )}
         {showIssues &&
-          shownIssues.map((issue, n) => (
+          listedIssues.map((issue, n) => (
             <IssueItem
               key={n}
               issue={issue}
@@ -415,7 +428,7 @@ export function CvssInput({
       )}
 
       <ScorePanel scores={scores} messages={msg} />
-      <Announcer message={isEmpty && !overlay ? '' : statusMessage(scores, shownIssues, msg, fmt)} />
+      <Announcer message={isEmpty && !overlay ? '' : (remaining ?? statusMessage(scores, listedIssues, msg, fmt))} />
 
       {layered?.combined && contextLayers.length > 0 && (
         <div className="cvss-meta">
