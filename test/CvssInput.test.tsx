@@ -319,4 +319,20 @@ describe('metric groups in the picker', () => {
     fireEvent.change(textbox(), { target: { value: V31 + '/E:P/RL:O' } });
     expect(groupOf('Exploit Code Maturity').open).toBe(false);
   });
+
+  it('starts over when the version changes', () => {
+    render(<CvssInput defaultValue={V31} />);
+    setOpen(groupOf('Attack Vector'), false);
+    setOpen(groupOf('Modified Attack Vector'), true);
+    fireEvent.change(textbox(), { target: { value: V40 } });
+    expect(groupOf('Attack Vector').open).toBe(true);
+    expect(groupOf('Modified Attack Vector').open).toBe(false);
+  });
+
+  it('starts over when the picker switches to overlay mode', () => {
+    const { rerender } = render(<CvssInput />);
+    setOpen(groupOf('Attack Vector'), true);
+    rerender(<CvssInput baseVector={V31} />);
+    expect(groupOf('Attack Vector').open).toBe(false);
+  });
 });
