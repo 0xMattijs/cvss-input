@@ -10,6 +10,12 @@ workflow checks the entry and uses it as the GitHub release notes. Collect chang
 
 ## [Unreleased]
 
+### Added
+
+- A chevron at the right of each metric group's title shows whether the group is open.
+- Opening a metric group scrolls it into view, so its metrics aren't hidden below the fold of a
+  dialog or a page. A group that already fits doesn't move.
+
 ## [0.1.0] - 2026-11-18
 
 First release.

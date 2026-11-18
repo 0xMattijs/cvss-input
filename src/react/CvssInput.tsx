@@ -709,6 +709,9 @@ export function MetricPicker({
   const id = useId();
   const msg = useCvssMessages(messages);
   const fmt = useMemo(() => messageFormat(msg), [msg]);
+  // The group whose summary the user just clicked. Only that one is scrolled into view
+  // when it opens, not the groups that start open.
+  const opening = useRef<MetricGroup | null>(null);
   const groups = useMemo(() => {
     if (!version) return [];
     const def = VERSIONS[version];
@@ -762,8 +765,13 @@ export function MetricPicker({
             key={group}
             className="cvss-group"
             open={!readOnlyGroup && (group === 'base' || anySet) ? true : undefined}
+            onToggle={(e) => {
+              const userOpened = opening.current === group;
+              opening.current = null;
+              if (userOpened && e.currentTarget.open) revealGroup(e.currentTarget);
+            }}
           >
-            <summary>
+            <summary onClick={() => (opening.current = group)}>
               {msg.groups[group]}
               {readOnlyGroup && <span className="cvss-group-note">{' ' + msg.ui.groupFromBase}</span>}
             </summary>
@@ -829,6 +837,18 @@ export function MetricPicker({
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Scrolls a group the user just opened into view, so its metrics don't end up below the
+ * fold of a dialog or page. `nearest` doesn't move a group that already fits, and keeps
+ * the top of a group taller than the scroll area in view.
+ */
+function revealGroup(group: HTMLElement) {
+  if (typeof group.scrollIntoView !== 'function') return;
+  const reduce =
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  group.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+}
 
 /** One-line summary for screen readers: the scores, or the number of problems. */
 export function statusMessage(

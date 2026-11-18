@@ -380,6 +380,37 @@ button.cvss-issue-pos:focus-visible {
   display: flex;
   gap: 8px;
   align-items: baseline;
+  /* `display: flex` already drops the native marker in most browsers; the chevron
+     below replaces it everywhere. */
+  list-style: none;
+}
+
+.cvss-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron at the far right of the group title: down when closed, up when open. */
+.cvss-group > summary::after {
+  content: '';
+  flex: none;
+  align-self: center;
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--cvss-text-muted);
+  border-bottom: 2px solid var(--cvss-text-muted);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 150ms ease;
+}
+
+.cvss-group[open] > summary::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cvss-group > summary::after {
+    transition: none;
+  }
 }
 
 .cvss-group > summary:focus-visible {
@@ -612,6 +643,10 @@ button.cvss-issue-pos:focus-visible {
   }
 
   .cvss-severity {
+    border-color: CanvasText;
+  }
+
+  .cvss-group > summary::after {
     border-color: CanvasText;
   }
 
