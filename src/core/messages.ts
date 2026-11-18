@@ -1,5 +1,5 @@
 // Message catalogs: every text the components show, and every issue message.
-import { VERSIONS } from './definitions';
+import { GROUP_LABELS, VERSIONS, versionFamily } from './definitions';
 import type {
   CvssIssue,
   CvssVersion,
@@ -101,8 +101,6 @@ export type CvssMessagesInput = {
       : Partial<CvssMessages[K]>;
 };
 
-const FAMILY: Record<CvssVersion, VersionFamily> = { '2.0': '2.0', '3.0': '3.x', '3.1': '3.x', '4.0': '4.0' };
-
 function namesOf(version: CvssVersion): MetricNames {
   const notDefined = VERSIONS[version].notDefined;
   return Object.fromEntries(
@@ -122,13 +120,7 @@ const list = (items: string[]) => items.join(', ');
 export const en: CvssMessages = {
   locale: 'en',
   severity: { None: 'None', Low: 'Low', Medium: 'Medium', High: 'High', Critical: 'Critical' },
-  groups: {
-    base: 'Base',
-    temporal: 'Temporal',
-    threat: 'Threat',
-    environmental: 'Environmental',
-    supplemental: 'Supplemental',
-  },
+  groups: { ...GROUP_LABELS },
   notDefined: 'Not Defined',
   metrics: { '2.0': namesOf('2.0'), '3.x': namesOf('3.1'), '4.0': namesOf('4.0') },
   issues: {
@@ -267,7 +259,7 @@ function numberFormats(locale: string): Intl.NumberFormat[] {
  */
 export function messageFormat(messages: CvssMessages, layerLabel?: (id: string) => string | undefined): MessageFormat {
   const [plain, oneDecimal] = numberFormats(messages.locale);
-  const names = (version: CvssVersion) => messages.metrics[FAMILY[version]];
+  const names = (version: CvssVersion) => messages.metrics[versionFamily(version)];
   const f: MessageFormat = {
     number: (n) => plain.format(n),
     score: (n) => oneDecimal.format(n),

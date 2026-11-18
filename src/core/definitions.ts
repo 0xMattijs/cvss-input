@@ -1,4 +1,4 @@
-import type { CvssVersion, MetricDef, MetricGroup, MetricValueDef, ValueOrder, VersionDef } from './types';
+import type { CvssVersion, MetricDef, MetricGroup, MetricValueDef, ValueOrder, VersionDef, VersionFamily } from './types';
 
 type ValueTuple = [code: string, name: string];
 
@@ -151,6 +151,11 @@ export const ALL_VERSIONS: CvssVersion[] = ['2.0', '3.0', '3.1', '4.0'];
 
 export function getMetricDef(version: CvssVersion, key: string): MetricDef | undefined {
   return VERSIONS[version].metrics.find((m) => m.key === key);
+}
+
+/** The version family that shares metric names and layer vectors: 3.0 and 3.1 are both `3.x`. */
+export function versionFamily(version: CvssVersion): VersionFamily {
+  return version === '3.0' || version === '3.1' ? '3.x' : version;
 }
 
 export const GROUP_LABELS: Record<MetricGroup, string> = {

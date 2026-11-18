@@ -1,9 +1,10 @@
-import { VERSIONS, getMetricDef } from './definitions';
-import { capIssues, evaluate, scoreFor, serialize } from './evaluate';
+import { VERSIONS, getMetricDef, versionFamily } from './definitions';
+import { capIssues, evaluate, evaluateWithBase, scoreFor, serialize } from './evaluate';
 import { en, makeIssue } from './messages';
 import type {
   CvssIssue,
   CvssLayer,
+  CvssResult,
   CvssVersion,
   LayerOutcome,
   LayeredOptions,
@@ -12,14 +13,9 @@ import type {
   MetricOverride,
   MetricSource,
   SecurityRequirements,
-  VersionFamily,
 } from './types';
 
 const DEFAULT_GROUPS: MetricGroup[] = ['temporal', 'threat', 'environmental', 'supplemental'];
-
-export function versionFamily(version: CvssVersion): VersionFamily {
-  return version === '3.0' || version === '3.1' ? '3.x' : version;
-}
 
 /**
  * Converts version-neutral security requirements to CR, IR, and AR metrics.
@@ -61,8 +57,21 @@ export function evaluateLayers(
   layers: CvssLayer[],
   options: LayeredOptions = {},
 ): LayeredResult {
+  return evaluateLayersWithBase(baseVector, layers, options);
+}
+
+/**
+ * `evaluateLayers`, with the base vector already evaluated. Internal: `preBase` must be
+ * `evaluate(baseVector, { version, strict, maxLength, v2Method })` with the same options.
+ */
+export function evaluateLayersWithBase(
+  baseVector: string,
+  layers: CvssLayer[],
+  options: LayeredOptions = {},
+  preBase?: CvssResult,
+): LayeredResult {
   const { version: mode = 'auto', strict = false, conflict = 'error', maxLength, v2Method } = options;
-  const base = evaluate(baseVector, { version: mode, strict, maxLength, v2Method });
+  const base = preBase ?? evaluate(baseVector, { version: mode, strict, maxLength, v2Method });
   const issues: CvssIssue[] = base.issues.map((i) => ({ ...i, layer: 'base' }));
 
   const empty = (outcomes: LayerOutcome[]): LayeredResult => ({
@@ -92,6 +101,9 @@ export function evaluateLayers(
     version,
     Object.fromEntries(Object.entries(base.metrics).filter(([k]) => getMetricDef(version, k)?.group === 'base')),
   );
+  // Every layer is checked against the base metrics alone. Evaluate those once, not per layer.
+  const baseOnlyOptions = { version, strict, maxLength };
+  const baseOnlyResult = evaluate(baseOnly, baseOnlyOptions);
 
   // The base vector's own temporal and environmental metrics form an implicit first layer.
   const baseLayer: LayerOutcome = {
@@ -144,7 +156,7 @@ export function evaluateLayers(
     }
 
     if (vector !== null && vector.trim() !== '') {
-      result = evaluate(vector, { baseVector: baseOnly, version, strict, maxLength });
+      result = evaluateWithBase(vector, { ...baseOnlyOptions, baseVector: baseOnly }, baseOnlyResult);
       for (const i of result.issues) add(i);
       for (const [key, value] of Object.entries(result.metrics)) {
         const mdef = getMetricDef(version, key);

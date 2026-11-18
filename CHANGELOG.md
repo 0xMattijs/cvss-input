@@ -10,6 +10,12 @@ workflow checks the entry and uses it as the GitHub release notes. Collect chang
 
 ## [Unreleased]
 
+### Changed
+
+- `evaluateLayers` evaluates the base vector once instead of once per layer, which makes it about 40%
+  faster with 10 layers. `CvssInput` also reuses the evaluated base vector, and evaluates each change
+  once instead of twice when `onChange` is set.
+
 ### Fixed
 
 - An overlay or layer vector that is only a prefix, such as `CVSS:4.0/`, is now checked against the

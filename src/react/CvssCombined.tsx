@@ -4,7 +4,7 @@ import { evaluateLayers } from '../core/layers';
 import { formatIssue, messageFormat } from '../core/messages';
 import type { CvssMessages, CvssMessagesInput } from '../core/messages';
 import type { ConflictRule, CvssLayer, LayeredResult, VersionMode } from '../core/types';
-import { ScorePanel } from './CvssInput';
+import { IssueItem, ScorePanel, layerLabels } from './CvssInput';
 import { useCvssMessages } from './messages';
 
 export interface UseCvssLayersOptions {
@@ -68,9 +68,8 @@ export function CvssCombined({
 }: CvssCombinedProps) {
   const msg = useCvssMessages(messages);
   const r = useCvssLayers(baseVector, layers, { version, strict, conflict, maxLength, v2Method });
-  const labels: Record<string, string> = { base: msg.ui.baseVector };
-  for (const l of r.layers) labels[l.id] = l.label;
-  const fmt = messageFormat(msg, (layer) => labels[layer]);
+  const labels = useMemo(() => layerLabels(r.layers, msg), [r, msg]);
+  const fmt = useMemo(() => messageFormat(msg, (layer) => labels[layer]), [msg, labels]);
   const ui = msg.ui;
   const def = r.version ? VERSIONS[r.version] : null;
 
@@ -107,13 +106,13 @@ export function CvssCombined({
       {showIssues && r.issues.length > 0 && (
         <ul className="cvss-issues">
           {r.issues.map((issue, n) => (
-            <li key={n} className="cvss-issue" data-severity={issue.severity}>
-              <span className="cvss-issue-kind">{issue.severity === 'error' ? ui.error : ui.note}</span>
-              <span>
-                {issue.layer && <strong>{labels[issue.layer] ?? issue.layer}: </strong>}
-                {formatIssue(issue, msg, fmt)}
-              </span>
-            </li>
+            <IssueItem
+              key={n}
+              issue={issue}
+              layerLabel={issue.layer ? (labels[issue.layer] ?? issue.layer) : undefined}
+              text={formatIssue(issue, msg, fmt)}
+              msg={msg}
+            />
           ))}
         </ul>
       )}

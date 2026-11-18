@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ALL_VERSIONS, VERSIONS, orderedValues } from '../core/definitions';
-import { DEFAULT_MAX_LENGTH, evaluate, serialize } from '../core/evaluate';
-import { evaluateLayers } from '../core/layers';
+import { DEFAULT_MAX_LENGTH, evaluate, evaluateWithBase, serialize } from '../core/evaluate';
+import { evaluateLayersWithBase } from '../core/layers';
 import { en, formatIssue, messageFormat } from '../core/messages';
 import type { CvssMessages, CvssMessagesInput, MessageFormat } from '../core/messages';
 import type {
@@ -140,23 +140,21 @@ function evaluateAll(
     maxLength: number;
     v2Method?: 'nvd' | 'spec';
   },
+  /** `evaluate(opts.baseVector)` with the same options, when `opts.baseVector` is set. */
+  base: CvssResult | null,
 ): Evaluation {
-  const own = evaluate(text, {
-    version: opts.version,
-    strict: opts.strict,
-    baseVector: opts.baseVector,
-    maxLength: opts.maxLength,
-    v2Method: opts.v2Method,
-  });
+  const { version, strict, maxLength, v2Method } = opts;
+  const own = evaluateWithBase(text, { version, strict, baseVector: opts.baseVector, maxLength, v2Method }, base ?? undefined);
   const built = buildLayers(text, opts.baseVector, opts.layers, opts.layerId, opts.ownLabel);
+  // The layered base is either the base vector, already evaluated, or this input, which `own`
+  // evaluated with the same options. Pass it on instead of evaluating it again.
   const layered = built
-    ? evaluateLayers(built.base, built.layers, {
-        version: opts.version,
-        strict: opts.strict,
-        conflict: opts.conflict,
-        maxLength: opts.maxLength,
-        v2Method: opts.v2Method,
-      })
+    ? evaluateLayersWithBase(
+        built.base,
+        built.layers,
+        { version, strict, conflict: opts.conflict, maxLength, v2Method },
+        (opts.baseVector !== undefined ? base : own) ?? undefined,
+      )
     : null;
   return { own, layered };
 }
@@ -192,20 +190,32 @@ export function CvssInput({
   const layersKey = JSON.stringify(layers ?? null);
   const ownLabel = msg.ui.thisInput;
   const evalOpts = { version, strict, baseVector, layers, layerId, ownLabel, conflict, maxLength, v2Method };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const { own: result, layered } = useMemo(() => evaluateAll(text, evalOpts), [text, version, strict, baseVector, layersKey, layerId, ownLabel, conflict, maxLength, v2Method]);
   const base = useCvss(baseVector ?? '', { version, strict, maxLength, v2Method });
+  const baseResult = overlay ? base : null;
+  // `emit` evaluates the next text for `onChange`, and the render that follows needs the same
+  // evaluation. Keep the last one, so each change is evaluated once.
+  const optsKey = JSON.stringify([version, strict, baseVector, layersKey, layerId, ownLabel, conflict, maxLength, v2Method]);
+  const lastEval = useRef<{ text: string; optsKey: string; evaluation: Evaluation } | null>(null);
+  const evaluateText = (t: string): Evaluation => {
+    const last = lastEval.current;
+    if (last && last.text === t && last.optsKey === optsKey) return last.evaluation;
+    const evaluation = evaluateAll(t, evalOpts, baseResult);
+    lastEval.current = { text: t, optsKey, evaluation };
+    return evaluation;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { own: result, layered } = useMemo(() => evaluateText(text), [text, optsKey, baseResult]);
 
   const emit = useCallback(
     (next: string) => {
       if (!controlled) setInternal(next);
       if (onChange) {
-        const e = evaluateAll(next, evalOpts);
+        const e = evaluateText(next);
         onChange(next, e.own, e.layered);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [controlled, onChange, version, strict, baseVector, layersKey, layerId, ownLabel, conflict, maxLength, v2Method],
+    [controlled, onChange, optsKey, baseResult],
   );
 
   const [emptyVersion, setEmptyVersion] = useState<CvssVersion>(defaultPickerVersion);
@@ -239,11 +249,7 @@ export function CvssInput({
   };
 
   // Issues: the input's own, plus layer issues from the combination.
-  const labels = useMemo(() => {
-    const map: Record<string, string> = { base: msg.ui.baseVector };
-    for (const l of layered?.layers ?? []) map[l.id] = l.label;
-    return map;
-  }, [layered, msg]);
+  const labels = useMemo(() => layerLabels(layered?.layers ?? [], msg), [layered, msg]);
   const fmt = useMemo(() => messageFormat(msg, (layer) => labels[layer]), [msg, labels]);
   const shownIssues: CvssIssue[] = [...result.issues];
   if (layered) {
@@ -499,11 +505,19 @@ function VersionLine({
   );
 }
 
-function IssueItem({
+/** Display names of the base vector and each layer, keyed by layer ID. */
+export function layerLabels(layers: readonly { id: string; label: string }[], msg: CvssMessages): Record<string, string> {
+  const map: Record<string, string> = { base: msg.ui.baseVector };
+  for (const l of layers) map[l.id] = l.label;
+  return map;
+}
+
+/** One row in an issue list. Shared by `CvssInput` and `CvssCombined`. */
+export function IssueItem({
   issue,
   text,
   layerLabel,
-  ranged,
+  ranged = false,
   onSelectRange,
   msg,
 }: {
@@ -511,7 +525,8 @@ function IssueItem({
   /** The issue's message in the current language. */
   text: string;
   layerLabel?: string;
-  ranged: boolean;
+  /** Whether to show the issue's position in the text field. */
+  ranged?: boolean;
   onSelectRange?: () => void;
   msg: CvssMessages;
 }) {
