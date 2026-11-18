@@ -10,9 +10,8 @@ Open an [issue](https://github.com/0xMattijs/cvss-input/issues). For a scoring b
 - The score you got and the score you expected.
 - Where the expected score comes from, such as the FIRST calculator or an NVD record.
 
-To report a security vulnerability, don't open a public issue. Use
-[private vulnerability reporting](https://github.com/0xMattijs/cvss-input/security/advisories/new)
-instead.
+To report a security vulnerability, don't open a public issue. Follow the
+[security policy](SECURITY.md) instead.
 
 ## Send a change
 
