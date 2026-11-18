@@ -60,6 +60,8 @@ export interface CvssMessages {
     treatAs: (version: string) => string;
     pickerUnavailable: string;
     pickerBlocked: string;
+    /** The required metrics a vector still lacks, such as "Still to set: AC, PR.". */
+    incomplete: (keys: string[]) => string;
     groupFromBase: string;
     contextValue: (layer: string, value: string, applied: boolean) => string;
     overriddenBy: (layer: string) => string;
@@ -195,6 +197,7 @@ export const en: CvssMessages = {
     treatAs: (v) => `Treat as CVSS ${v}`,
     pickerUnavailable: 'Enter a valid vector or set a version to use the metric picker.',
     pickerBlocked: 'Fix the errors in the vector to edit it with the picker.',
+    incomplete: (keys) => `Still to set: ${keys.join(', ')}.`,
     groupFromBase: '(from base vector)',
     contextValue: (layer, value, applied) => `${layer}: ${value} (${applied ? 'applied' : 'not applied'})`,
     overriddenBy: (layer) => `Overridden by ${layer}.`,

@@ -88,7 +88,16 @@ describe('CvssInput', () => {
     fireEvent.change(screen.getByLabelText('Version'), { target: { value: '3.1' } });
     fireEvent.click(within(metricGroup('Attack Vector')).getByLabelText('Network'));
     expect(textbox().value).toBe('CVSS:3.1/AV:N');
+    expect(screen.getByText('Still to set: AC, PR, UI, S, C, I, A.')).toBeTruthy();
+    expect(screen.queryByText('AC (Attack Complexity) is missing.')).toBeNull();
+    expect(textbox().getAttribute('aria-invalid')).toBe('false');
+  });
+
+  it('lists missing metrics as errors when the vector is also wrong', () => {
+    render(<CvssInput defaultValue="CVSS:3.1/AV:Q" />);
     expect(screen.getByText('AC (Attack Complexity) is missing.')).toBeTruthy();
+    expect(screen.queryByText(/^Still to set/)).toBeNull();
+    expect(textbox().getAttribute('aria-invalid')).toBe('true');
   });
 
   it('offers to add a 3.x prefix to an ambiguous vector', () => {

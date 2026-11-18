@@ -185,6 +185,7 @@ export const nl: CvssMessages = {
     treatAs: (v) => `Behandelen als CVSS ${v}`,
     pickerUnavailable: 'Voer een geldige vector in of stel een versie in om de metrickiezer te gebruiken.',
     pickerBlocked: 'Los de fouten in de vector op om hem met de kiezer te bewerken.',
+    incomplete: (keys) => `Nog in te stellen: ${keys.join(', ')}.`,
     groupFromBase: '(uit basisvector)',
     contextValue: (layer, value, applied) => `${layer}: ${value} (${applied ? 'toegepast' : 'niet toegepast'})`,
     overriddenBy: (layer) => `Overschreven door ${layer}.`,

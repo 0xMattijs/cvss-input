@@ -221,6 +221,11 @@
   background: var(--cvss-error-bg);
 }
 
+.cvss-issue[data-severity='info'] {
+  color: var(--cvss-text-muted);
+  background: var(--cvss-surface);
+}
+
 .cvss-issue[data-severity='warning'] {
   color: var(--cvss-warning);
   background: var(--cvss-warning-bg);
