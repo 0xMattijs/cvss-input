@@ -10,7 +10,7 @@ workflow checks the entry and uses it as the GitHub release notes. Collect chang
 
 ## [Unreleased]
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-11-18
 
 First release.
 
