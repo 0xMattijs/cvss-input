@@ -394,7 +394,7 @@ button.cvss-issue-pos:focus-visible {
   content: '';
   flex: none;
   align-self: center;
-  margin-left: auto;
+  margin-inline-start: auto;
   width: 7px;
   height: 7px;
   border-right: 2px solid var(--cvss-text-muted);

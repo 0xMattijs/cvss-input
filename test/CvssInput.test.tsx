@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CvssCombined, CvssInput, evaluate } from '../src';
 import { markSegments } from '../src/react/CvssInput';
 import type { CvssLayer } from '../src';
@@ -294,40 +294,51 @@ describe('value order in the picker', () => {
 describe('metric groups', () => {
   const group = (title: string) =>
     screen.getByText(title, { selector: '.cvss-group > summary' }).closest('details') as HTMLDetailsElement;
-
-  it('scrolls a group the user opens into view', async () => {
-    const scroll = vi.fn();
-    const original = Element.prototype.scrollIntoView;
+  // jsdom has no scrollIntoView; define one to spy on.
+  const scroll = vi.fn();
+  beforeEach(() => {
     Element.prototype.scrollIntoView = scroll;
-    try {
-      render(<CvssInput defaultValue={V31} version="3.1" />);
-      const temporal = group('Temporal');
-      expect(temporal.open).toBe(false);
-      fireEvent.click(temporal.querySelector('summary')!);
-      temporal.open = true;
-      fireEvent(temporal, new Event('toggle'));
-      expect(scroll).toHaveBeenCalledTimes(1);
-      expect(scroll.mock.contexts[0]).toBe(temporal);
-      expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ block: 'nearest' }));
-    } finally {
-      Element.prototype.scrollIntoView = original;
-    }
+  });
+  afterEach(() => {
+    scroll.mockReset();
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
+  // Clicks the summary, then delivers the toggle event the browser fires asynchronously.
+  const click = (details: HTMLDetailsElement) => fireEvent.click(details.querySelector('summary')!);
+  const toggle = (details: HTMLDetailsElement, open: boolean) => {
+    details.open = open;
+    fireEvent(details, new Event('toggle'));
+  };
+
+  it('scrolls a group the user opens into view', () => {
+    render(<CvssInput defaultValue={V31} version="3.1" />);
+    const temporal = group('Temporal');
+    expect(temporal.open).toBe(false);
+    click(temporal);
+    toggle(temporal, true);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll.mock.contexts[0]).toBe(temporal);
+    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ block: 'nearest' }));
+  });
+
+  it('scrolls both groups when the user opens a second before the first toggle event', () => {
+    render(<CvssInput defaultValue={V31} version="3.1" />);
+    const temporal = group('Temporal');
+    const environmental = group('Environmental');
+    click(temporal);
+    click(environmental);
+    toggle(temporal, true);
+    toggle(environmental, true);
+    expect(scroll.mock.contexts).toEqual([temporal, environmental]);
   });
 
   it("doesn't scroll a group that starts open or that the user closes", () => {
-    const scroll = vi.fn();
-    const original = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = scroll;
-    try {
-      render(<CvssInput defaultValue={V31} version="3.1" />);
-      const base = group('Base');
-      fireEvent(base, new Event('toggle'));
-      fireEvent.click(base.querySelector('summary')!);
-      base.open = false;
-      fireEvent(base, new Event('toggle'));
-      expect(scroll).not.toHaveBeenCalled();
-    } finally {
-      Element.prototype.scrollIntoView = original;
-    }
+    render(<CvssInput defaultValue={V31} version="3.1" />);
+    const base = group('Base');
+    fireEvent(base, new Event('toggle'));
+    click(base);
+    toggle(base, false);
+    expect(scroll).not.toHaveBeenCalled();
   });
 });

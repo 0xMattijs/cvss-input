@@ -709,9 +709,11 @@ export function MetricPicker({
   const id = useId();
   const msg = useCvssMessages(messages);
   const fmt = useMemo(() => messageFormat(msg), [msg]);
-  // The group whose summary the user just clicked. Only that one is scrolled into view
-  // when it opens, not the groups that start open.
-  const opening = useRef<MetricGroup | null>(null);
+  // The groups whose summary the user clicked and whose toggle event hasn't run yet.
+  // Only those are scrolled into view when they open, not the groups that start open.
+  // A set, not one value: toggle events fire asynchronously, so two quick clicks can
+  // both be pending.
+  const opening = useRef(new Set<MetricGroup>());
   const groups = useMemo(() => {
     if (!version) return [];
     const def = VERSIONS[version];
@@ -766,12 +768,11 @@ export function MetricPicker({
             className="cvss-group"
             open={!readOnlyGroup && (group === 'base' || anySet) ? true : undefined}
             onToggle={(e) => {
-              const userOpened = opening.current === group;
-              opening.current = null;
+              const userOpened = opening.current.delete(group);
               if (userOpened && e.currentTarget.open) revealGroup(e.currentTarget);
             }}
           >
-            <summary onClick={() => (opening.current = group)}>
+            <summary onClick={() => opening.current.add(group)}>
               {msg.groups[group]}
               {readOnlyGroup && <span className="cvss-group-note">{' ' + msg.ui.groupFromBase}</span>}
             </summary>
