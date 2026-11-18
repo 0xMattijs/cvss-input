@@ -717,6 +717,32 @@ export function MetricPicker({
       .filter((g) => g.metrics.length > 0);
   }, [version, allowedGroups]);
 
+  // Groups open automatically when a metric in them gets set, but never close by themselves:
+  // `openGroups` records every open and close, so clearing the last metric leaves a group open.
+  const [openGroups, setOpenGroups] = useState<Partial<Record<MetricGroup, boolean>>>({});
+  const notDefined = version ? VERSIONS[version].notDefined : undefined;
+  const autoOpen = groups
+    .filter(({ group, metrics: groupMetrics }) => {
+      if (baseMetrics !== null && group === 'base') return false;
+      if (group === 'base') return true;
+      return groupMetrics.some(
+        (m) =>
+          (metrics[m.key] !== undefined && metrics[m.key] !== notDefined) ||
+          (context?.map[m.key]?.length ?? 0) > 0,
+      );
+    })
+    .map(({ group }) => group);
+  const autoOpenKey = autoOpen.join(' ');
+  const prevAutoOpen = useRef<string[]>([]);
+  useEffect(() => {
+    const added = autoOpen.filter((g) => !prevAutoOpen.current.includes(g));
+    prevAutoOpen.current = autoOpen;
+    if (added.length > 0) {
+      setOpenGroups((s) => ({ ...s, ...Object.fromEntries(added.map((g) => [g, true])) }));
+    }
+    // autoOpenKey stands for autoOpen's contents, which is a new array on every render.
+  }, [autoOpenKey]);
+
   if (!version) {
     return (
       <div className="cvss-picker" data-blocked>
@@ -752,16 +778,16 @@ export function MetricPicker({
       {groups.map(({ group, metrics: groupMetrics }) => {
         const readOnlyGroup = baseMetrics !== null && group === 'base';
         const source = readOnlyGroup ? baseMetrics : metrics;
-        const anySet = groupMetrics.some(
-          (m) =>
-            (source[m.key] !== undefined && source[m.key] !== def.notDefined) ||
-            (context?.map[m.key]?.length ?? 0) > 0,
-        );
+        const open = openGroups[group] ?? autoOpen.includes(group);
         return (
           <details
             key={group}
             className="cvss-group"
-            open={!readOnlyGroup && (group === 'base' || anySet) ? true : undefined}
+            open={open || undefined}
+            onToggle={(e) => {
+              const isOpen = e.currentTarget.open;
+              setOpenGroups((s) => (s[group] === isOpen ? s : { ...s, [group]: isOpen }));
+            }}
           >
             <summary>
               {msg.groups[group]}

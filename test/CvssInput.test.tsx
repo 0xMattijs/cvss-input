@@ -290,3 +290,33 @@ describe('value order in the picker', () => {
     expect(options(/^Confidentiality C$/)).toEqual(['H', 'L', 'N']);
   });
 });
+
+describe('metric groups in the picker', () => {
+  const groupOf = (metric: string) => metricGroup(metric).closest('details') as HTMLDetailsElement;
+  const setOpen = (details: HTMLDetailsElement, open: boolean) => {
+    details.open = open;
+    fireEvent(details, new Event('toggle'));
+  };
+
+  it('opens a group when one of its metrics gets set', () => {
+    render(<CvssInput defaultValue={V31} />);
+    expect(groupOf('Exploit Code Maturity').open).toBe(false);
+    fireEvent.change(textbox(), { target: { value: V31 + '/E:P' } });
+    expect(groupOf('Exploit Code Maturity').open).toBe(true);
+  });
+
+  it('keeps a group open when its last metric is cleared', () => {
+    render(<CvssInput defaultValue={V31} />);
+    setOpen(groupOf('Exploit Code Maturity'), true);
+    fireEvent.click(within(metricGroup('Exploit Code Maturity')).getByLabelText('Proof-of-Concept'));
+    fireEvent.click(within(metricGroup('Exploit Code Maturity')).getByLabelText('Not Defined'));
+    expect(groupOf('Exploit Code Maturity').open).toBe(true);
+  });
+
+  it('keeps a group closed after the user closes it', () => {
+    render(<CvssInput defaultValue={V31 + '/E:P'} />);
+    setOpen(groupOf('Exploit Code Maturity'), false);
+    fireEvent.change(textbox(), { target: { value: V31 + '/E:P/RL:O' } });
+    expect(groupOf('Exploit Code Maturity').open).toBe(false);
+  });
+});
