@@ -332,10 +332,16 @@ CI runs the typecheck, tests, and build on Node 22 and 24 with React 18 and 19 f
 The release workflow publishes to npm with [trusted publishing](https://docs.npmjs.com/trusted-publishers),
 so no npm token is stored in GitHub, and npm shows a provenance link to the commit.
 
-1. In `CHANGELOG.md`, rename `## [Unreleased]` to the new version with today's date, such as
-   `## [0.2.0] - 2026-12-01`, and add an empty `## [Unreleased]` above it.
-2. Update `version` in `package.json` and commit.
-3. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+1. On a new branch, rename `## [Unreleased]` in `CHANGELOG.md` to the new version with today's date,
+   such as `## [0.2.0] - 2026-12-01`, and add an empty `## [Unreleased]` above it.
+2. Update `version` in `package.json`, commit, and open a pull request. `master` accepts changes only
+   through pull requests.
+3. After the pull request merges, tag the merge commit and push the tag:
+
+   ```sh
+   git checkout master && git pull
+   git tag v0.2.0 && git push origin v0.2.0
+   ```
 
 Before publishing, the workflow checks that the tag matches `package.json` and that `CHANGELOG.md` has a
 dated entry for the version. After publishing, it creates a GitHub release with that entry as the notes.
