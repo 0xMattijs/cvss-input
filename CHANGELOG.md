@@ -10,11 +10,23 @@ workflow checks the entry and uses it as the GitHub release notes. Collect chang
 
 ## [Unreleased]
 
+### Added
+
+- `missingMetrics(issues, ownLayer?)` in the core: the required metrics an incomplete vector still
+  lacks, or `null` when the vector has any other error.
+- `formatIncomplete(keys, messages)` and an optional `ui.incomplete` text (English and Dutch). A catalog
+  without it falls back to English, so existing catalogs still type check.
+
 ### Changed
 
-- An incomplete vector, such as one being built in the picker, shows a single note with the required
-  metrics still to set instead of an error per missing metric, and the field isn't marked invalid.
-  Missing metrics are still listed as errors when the vector also has another error.
+- `CvssInput` shows an incomplete vector, such as one being built in the picker, as one row with the
+  required metrics still to set instead of an error per missing metric. While focus is in the
+  component, the row is a note and the field isn't marked invalid. Once focus leaves the component or
+  its form is submitted, the row is an error and the field is marked invalid. When the vector also
+  has another error, missing metrics are listed one by one, as before. `evaluate` is unchanged: it
+  still returns one `MISSING_METRIC` error per metric, and the vector stays `valid: false`.
+- `statusMessage` summarizes an incomplete vector as the metrics still to set, followed by any other
+  problem, such as another layer's conflict.
 
 ## [0.1.0] - 2026-11-18
 

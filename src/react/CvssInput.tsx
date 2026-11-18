@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ALL_VERSIONS, VERSIONS, orderedValues } from '../core/definitions';
-import { DEFAULT_MAX_LENGTH, MAX_ISSUES, evaluate, serialize } from '../core/evaluate';
+import { DEFAULT_MAX_LENGTH, MAX_ISSUES, evaluate, missingMetrics, serialize } from '../core/evaluate';
 import { evaluateLayers } from '../core/layers';
-import { en, formatIssue, messageFormat } from '../core/messages';
+import { en, formatIncomplete, formatIssue, messageFormat } from '../core/messages';
 import type { CvssMessages, CvssMessagesInput, MessageFormat } from '../core/messages';
 import type {
   ConflictRule,
@@ -210,6 +210,24 @@ export function CvssInput({
 
   const [emptyVersion, setEmptyVersion] = useState<CvssVersion>(defaultPickerVersion);
   const isEmpty = text.trim() === '';
+
+  // Whether focus has left the component (or its form was submitted) since the vector was
+  // last empty. Until then an incomplete vector is shown as a note, not an error.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    if (isEmpty) setTouched(false);
+  }, [isEmpty]);
+  useEffect(() => {
+    const form = rootRef.current?.closest('form');
+    if (!form) return;
+    const onSubmit = () => setTouched(true);
+    form.addEventListener('submit', onSubmit, true);
+    return () => form.removeEventListener('submit', onSubmit, true);
+  }, []);
+  const handleFocusOut = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setTouched(true);
+  };
   const pickerVersion: CvssVersion | null =
     result.version ?? (overlay ? null : version !== 'auto' ? version : isEmpty ? emptyVersion : null);
   const structural = result.issues.filter((i) => STRUCTURAL.includes(i.code));
@@ -264,12 +282,12 @@ export function CvssInput({
   );
   const showIssues = !isEmpty || overlay;
   // A vector whose only errors are required metrics not set yet isn't wrong: the user is
-  // still building it, in the picker or by typing. List what is left in one note instead
-  // of an error per metric, and don't mark the field invalid.
-  const missing = errors.filter((i) => i.code === 'MISSING_METRIC');
-  const incomplete = missing.length > 0 && missing.length === errors.length;
-  const listedIssues = incomplete ? shownIssues.filter((i) => !missing.includes(i)) : shownIssues;
-  const remaining = incomplete ? msg.ui.incomplete(missing.map((i) => i.metric!)) : null;
+  // still building it, in the picker or by typing. List what is left in one row instead of
+  // an error per metric. While focus is in the component that row is a note and the field
+  // isn't marked invalid; once focus leaves it or its form is submitted, it is an error.
+  const missing = missingMetrics(errors, ownLayerId);
+  const listedIssues = missing ? shownIssues.filter((i) => i.code !== 'MISSING_METRIC') : shownIssues;
+  const pending = missing !== null && !touched;
 
   // Issues with a character range in this field, marked in the text and linked from the list.
   const ownRanged = shownIssues.filter(
@@ -335,9 +353,11 @@ export function CvssInput({
 
   return (
     <div
+      ref={rootRef}
       className={['cvss', className].filter(Boolean).join(' ')}
       lang={msg.locale}
       data-disabled={disabled || undefined}
+      onBlur={handleFocusOut}
     >
       {mode !== 'picker' && (
         <div className="cvss-field">
@@ -371,7 +391,7 @@ export function CvssInput({
             disabled={disabled}
             maxLength={maxLength}
             placeholder={placeholderFor(pickerVersion ?? defaultPickerVersion, overlay)}
-            aria-invalid={showIssues && errors.length > 0 && !incomplete}
+            aria-invalid={showIssues && errors.length > 0 && !pending}
             aria-describedby={issuesId}
             onChange={(e) => emit(e.target.value)}
             onBlur={handleBlur}
@@ -397,19 +417,16 @@ export function CvssInput({
 
       {/* Not a live region: it changes on every keystroke. The status below summarizes instead. */}
       <ul id={issuesId} className="cvss-issues">
-        {showIssues && remaining && (
-          <li className="cvss-issue" data-severity="info">
-            <span className="cvss-issue-kind">{msg.ui.note}</span>
-            <span>{remaining}</span>
-          </li>
+        {showIssues && missing && (
+          <IssueItem severity={pending ? 'info' : 'error'} text={formatIncomplete(missing, msg)} msg={msg} />
         )}
         {showIssues &&
           listedIssues.map((issue, n) => (
             <IssueItem
               key={n}
-              issue={issue}
+              severity={issue.severity}
               layerLabel={issue.layer && issue.layer !== ownLayerId ? labels[issue.layer] : undefined}
-              ranged={ownRanged.includes(issue)}
+              position={ownRanged.includes(issue) ? issue.start! + 1 : undefined}
               text={formatIssue(issue, msg, fmt)}
               msg={msg}
               onSelectRange={canSelect ? () => selectRange(issue) : undefined}
@@ -428,7 +445,7 @@ export function CvssInput({
       )}
 
       <ScorePanel scores={scores} messages={msg} />
-      <Announcer message={isEmpty && !overlay ? '' : (remaining ?? statusMessage(scores, listedIssues, msg, fmt))} />
+      <Announcer message={isEmpty && !overlay ? '' : statusMessage(scores, shownIssues, msg, fmt)} />
 
       {layered?.combined && contextLayers.length > 0 && (
         <div className="cvss-meta">
@@ -507,30 +524,32 @@ function VersionLine({
   );
 }
 
+/** One row in the issue list: an issue, or the note for an incomplete vector. */
 function IssueItem({
-  issue,
+  severity,
   text,
   layerLabel,
-  ranged,
+  position,
   onSelectRange,
   msg,
 }: {
-  issue: CvssIssue;
-  /** The issue's message in the current language. */
+  /** `info` is the neutral note for a vector that is still being built. */
+  severity: CvssIssue['severity'] | 'info';
+  /** The message in the current language. */
   text: string;
   layerLabel?: string;
-  ranged: boolean;
+  /** 1-based position in the text field, for issues with a character range. */
+  position?: number;
   onSelectRange?: () => void;
   msg: CvssMessages;
 }) {
-  const position = issue.start! + 1;
   return (
-    <li className="cvss-issue" data-severity={issue.severity}>
-      <span className="cvss-issue-kind">{issue.severity === 'error' ? msg.ui.error : msg.ui.note}</span>
+    <li className="cvss-issue" data-severity={severity}>
+      <span className="cvss-issue-kind">{severity === 'error' ? msg.ui.error : msg.ui.note}</span>
       <span>
         {layerLabel && <strong>{layerLabel}: </strong>}
         {text}
-        {ranged && (
+        {position !== undefined && (
           <>
             {' '}
             {onSelectRange ? (
@@ -851,6 +870,13 @@ export function statusMessage(
   format: MessageFormat = messageFormat(messages),
 ): string {
   const ui = messages.ui;
+  // An incomplete vector is summarized as the metrics still to set, followed by anything
+  // else wrong, such as another layer's conflict.
+  const missing = missingMetrics(issues);
+  if (missing) {
+    const rest = statusMessage(scores, issues.filter((i) => i.code !== 'MISSING_METRIC'), messages, format);
+    return [formatIncomplete(missing, messages), rest].filter(Boolean).join(' ');
+  }
   const errors = issues.filter((i) => i.severity === 'error');
   if (errors.length > 0) {
     const capped = errors.some((i) => i.code === 'TOO_MANY_ISSUES');

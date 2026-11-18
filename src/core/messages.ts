@@ -60,8 +60,12 @@ export interface CvssMessages {
     treatAs: (version: string) => string;
     pickerUnavailable: string;
     pickerBlocked: string;
-    /** The required metrics a vector still lacks, such as "Still to set: AC, PR.". */
-    incomplete: (keys: string[]) => string;
+    /**
+     * The required metrics a vector still lacks, such as "Still to set: AC, PR.". Optional so
+     * catalogs written before it was added still type check; `formatIncomplete` falls back to
+     * English.
+     */
+    incomplete?: (keys: string[]) => string;
     groupFromBase: string;
     contextValue: (layer: string, value: string, applied: boolean) => string;
     overriddenBy: (layer: string) => string;
@@ -197,7 +201,7 @@ export const en: CvssMessages = {
     treatAs: (v) => `Treat as CVSS ${v}`,
     pickerUnavailable: 'Enter a valid vector or set a version to use the metric picker.',
     pickerBlocked: 'Fix the errors in the vector to edit it with the picker.',
-    incomplete: (keys) => `Still to set: ${keys.join(', ')}.`,
+    incomplete: (keys) => incompleteEn(keys),
     groupFromBase: '(from base vector)',
     contextValue: (layer, value, applied) => `${layer}: ${value} (${applied ? 'applied' : 'not applied'})`,
     overriddenBy: (layer) => `Overridden by ${layer}.`,
@@ -293,6 +297,13 @@ export function formatIssue(issue: CvssIssue, messages: CvssMessages = en, forma
   const fn = messages.issues[issue.code] as (p: unknown, f: MessageFormat) => string;
   const labels = (issue.params as { labels?: Record<string, string> }).labels;
   return fn(issue.params, format ?? messageFormat(messages, (id) => labels?.[id]));
+}
+
+const incompleteEn = (keys: string[]) => `Still to set: ${keys.join(', ')}.`;
+
+/** The note for an incomplete vector (see `missingMetrics`), in the catalog's language or English. */
+export function formatIncomplete(keys: string[], messages: CvssMessages = en): string {
+  return (messages.ui.incomplete ?? incompleteEn)(keys);
 }
 
 /** Builds an issue with its English message. */

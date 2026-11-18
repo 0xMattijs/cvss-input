@@ -89,7 +89,8 @@ result.scores;      // { kind: 'classic', base: { score: 9.8, severity: 'Critica
 - `version`: the version used for validation and scoring, and `detectedVersion`: what the input itself says.
 - `issues`: errors and warnings with a `code`, an English `message`, the `params` the message is built
   from, and, where it applies, `metric` and the `start`/`end` character range in the input.
-  `formatIssue(issue, nl)` returns the message in another language.
+  `formatIssue(issue, nl)` returns the message in another language. `missingMetrics(issues)` returns
+  the required metrics a vector lacks when those are its only errors, or `null`.
 - `normalized`: the input in canonical form; `combined`: base vector plus overlay.
 - `scores`: `null` when the vector has errors. `scores.overall` is the final score: for 2.0 and 3.x,
   Environmental if any environmental metric is set, otherwise Temporal if any temporal metric is set,
@@ -247,6 +248,7 @@ issue in any language, and `statusMessage(scores, issues, messages)` builds the 
 | Unprefixed 3.x vector in auto mode | Error: 3.0 and 3.1 score differently, so the component offers to add the prefix | Error |
 | Prefix conflicts with forced version or base vector | Error | Error |
 | Unknown metric, invalid value, duplicate, missing base metric | Error | Error |
+| Only base metrics missing (the vector is still being built) | One row, "Still to set: …": a note while focus is in the component, an error once it leaves or the form is submitted | Same |
 | Base metric in an overlay | Error | Error |
 | `CVSS2#` prefix or surrounding parentheses on a 2.0 vector | Accepted; removed on normalization | Same |
 

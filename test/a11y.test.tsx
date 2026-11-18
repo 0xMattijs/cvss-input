@@ -93,6 +93,24 @@ describe('screen reader support', () => {
     expect(statusMessage(scores(V40), [])).toBe('CVSS-B 9.3 Critical.');
   });
 
+  it('summarizes an incomplete vector as the metrics still to set', () => {
+    const { issues } = evaluate('CVSS:3.1/AV:N/AC:L');
+    expect(statusMessage(null, issues)).toBe('Still to set: PR, UI, S, C, I, A.');
+  });
+
+  it("announces another layer's error after the metrics still to set", () => {
+    const { issues } = evaluate('CVSS:3.1/AV:N/AC:L');
+    const conflict = { severity: 'error' as const, code: 'METRIC_CONFLICT' as const, message: 'AV conflicts.', layer: 'asset' };
+    expect(statusMessage(null, [...issues, conflict])).toBe('Still to set: PR, UI, S, C, I, A. 1 problem. AV conflicts.');
+  });
+
+  it('falls back to English for a catalog without ui.incomplete', () => {
+    const { incomplete: _, ...ui } = nl.ui;
+    const { issues } = evaluate('CVSS:3.1/AV:N/AC:L');
+    expect(statusMessage(null, issues, { ...nl, ui })).toBe('Still to set: PR, UI, S, C, I, A.');
+    expect(statusMessage(null, issues, nl)).toBe('Nog in te stellen: PR, UI, S, C, I, A.');
+  });
+
   it('describes picker radio groups with notes from other layers', () => {
     render(<CvssInput baseVector={V31} layers={[asset]} layerId="feed" />);
     const group = screen.getByRole('group', { name: /^Confidentiality Requirement/ });

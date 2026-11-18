@@ -370,3 +370,17 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
     scores: scoreFor(version, effectiveMetrics, { v2Method }),
   });
 }
+
+/**
+ * The required metrics an incomplete vector still lacks, or `null` when it isn't merely
+ * incomplete. A vector is incomplete when its only errors are `MISSING_METRIC`: nothing in it
+ * is wrong, it just isn't finished, as while someone builds it in the picker. Errors another
+ * layer reports (a `layer` other than `ownLayer`) don't count. The result stays
+ * `valid: false`; this only tells a UI it can show one note instead of an error per metric.
+ */
+export function missingMetrics(issues: CvssIssue[], ownLayer?: string): string[] | null {
+  const own = issues.filter((i) => isErr(i) && (!i.layer || i.layer === ownLayer));
+  const missing = own.filter((i) => i.code === 'MISSING_METRIC');
+  if (missing.length === 0 || missing.length !== own.length) return null;
+  return missing.map((i) => i.metric!);
+}

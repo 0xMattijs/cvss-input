@@ -93,6 +93,40 @@ describe('CvssInput', () => {
     expect(textbox().getAttribute('aria-invalid')).toBe('false');
   });
 
+  it('turns the note into an error once focus leaves the component', () => {
+    render(<CvssInput defaultValue="CVSS:3.1/AV:N/AC:L" />);
+    const note = () => screen.getByText('Still to set: PR, UI, S, C, I, A.').closest('.cvss-issue')!;
+    expect(note().getAttribute('data-severity')).toBe('info');
+    // Moving from the field to a picker option stays inside the component.
+    fireEvent.blur(textbox(), { relatedTarget: within(metricGroup('Scope')).getByLabelText('Changed') });
+    expect(note().getAttribute('data-severity')).toBe('info');
+    expect(textbox().getAttribute('aria-invalid')).toBe('false');
+    fireEvent.blur(textbox(), { relatedTarget: null });
+    expect(note().getAttribute('data-severity')).toBe('error');
+    expect(textbox().getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('turns the note into an error when its form is submitted', () => {
+    render(
+      <form onSubmit={(e) => e.preventDefault()}>
+        <CvssInput defaultValue="CVSS:3.1/AV:N/AC:L" />
+      </form>,
+    );
+    fireEvent.submit(textbox().form!);
+    expect(textbox().getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText('Still to set: PR, UI, S, C, I, A.').closest('.cvss-issue')!.getAttribute('data-severity')).toBe(
+      'error',
+    );
+  });
+
+  it('shows the note again after the vector is cleared', () => {
+    render(<CvssInput defaultValue="CVSS:3.1/AV:N/AC:L" />);
+    fireEvent.blur(textbox(), { relatedTarget: null });
+    fireEvent.change(textbox(), { target: { value: '' } });
+    fireEvent.change(textbox(), { target: { value: 'CVSS:3.1/AV:N' } });
+    expect(textbox().getAttribute('aria-invalid')).toBe('false');
+  });
+
   it('lists missing metrics as errors when the vector is also wrong', () => {
     render(<CvssInput defaultValue="CVSS:3.1/AV:Q" />);
     expect(screen.getByText('AC (Attack Complexity) is missing.')).toBeTruthy();

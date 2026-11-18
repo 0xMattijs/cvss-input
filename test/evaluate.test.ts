@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectVersion, evaluate, evaluateLayers } from '../src/core';
+import { detectVersion, evaluate, evaluateLayers, missingMetrics } from '../src/core';
 import type { ClassicScores, IssueCode, V4Scores } from '../src/core';
 
 const codes = (input: string, opts = {}) => evaluate(input, opts).issues.map((i) => i.code);
@@ -274,5 +274,23 @@ describe('overlay on a base vector', () => {
 
   it('reorders overlay metrics', () => {
     expect(evaluate('RC:C/E:P', { baseVector: base31 }).normalized).toBe('E:P/RC:C');
+  });
+});
+
+describe('missingMetrics', () => {
+  it('lists the required metrics an otherwise correct vector lacks', () => {
+    expect(missingMetrics(evaluate('CVSS:3.1/AV:N/AC:L').issues)).toEqual(['PR', 'UI', 'S', 'C', 'I', 'A']);
+  });
+
+  it('is null for a complete vector or one with another error', () => {
+    expect(missingMetrics(evaluate('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H').issues)).toBeNull();
+    expect(missingMetrics(evaluate('CVSS:3.1/AV:Q/AC:L').issues)).toBeNull();
+  });
+
+  it("ignores other layers' errors unless they belong to ownLayer", () => {
+    const { issues } = evaluate('CVSS:3.1/AV:N');
+    const conflict = { severity: 'error' as const, code: 'METRIC_CONFLICT' as const, message: '', layer: 'asset' };
+    expect(missingMetrics([...issues, conflict])).not.toBeNull();
+    expect(missingMetrics([...issues, conflict], 'asset')).toBeNull();
   });
 });
