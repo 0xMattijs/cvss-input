@@ -10,6 +10,19 @@ workflow checks the entry and uses it as the GitHub release notes. Collect chang
 
 ## [Unreleased]
 
+### Fixed
+
+- An overlay or layer vector that is only a prefix, such as `CVSS:4.0/`, is now checked against the
+  base vector's version. Before, a prefix for another version was accepted as valid.
+- Security requirements with an explicit `undefined` value, such as `{ C: 'H', I: undefined }`, now
+  count as not set instead of making the result invalid.
+- `evaluateLayers` now caps its combined issues at 20 plus a summary, like `evaluate`.
+- **Treat as CVSS 3.x** now adds the prefix inside parentheses around a vector, instead of breaking it.
+- The status message counts every listed error when some issues were left out, instead of always
+  saying "More than 20 problems".
+- A metric group that was open when the vector's version changed no longer closes when you clear its
+  last metric.
+
 ## [0.1.1] - 2026-11-18
 
 ### Fixed

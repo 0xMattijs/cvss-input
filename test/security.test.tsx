@@ -60,6 +60,15 @@ describe('length limit', () => {
 });
 
 describe('issue cap', () => {
+  it('caps the combined issues of all layers', () => {
+    const bad = 'x/'.repeat(30);
+    const layers = Array.from({ length: 10 }, (_, n) => ({ id: `l${n}`, vector: bad }));
+    const r = evaluateLayers(V31, layers);
+    expect(r.issues).toHaveLength(MAX_ISSUES + 1);
+    expect(r.issues.at(-1)!.code).toBe('TOO_MANY_ISSUES');
+    expect(r.valid).toBe(false);
+  });
+
   it(`reports at most ${MAX_ISSUES} issues plus a summary`, () => {
     const r = evaluate(V31 + '/' + 'x/'.repeat(100));
     expect(r.issues).toHaveLength(MAX_ISSUES + 1);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ALL_VERSIONS, VERSIONS, orderedValues } from '../core/definitions';
-import { DEFAULT_MAX_LENGTH, MAX_ISSUES, evaluate, serialize } from '../core/evaluate';
+import { DEFAULT_MAX_LENGTH, evaluate, serialize } from '../core/evaluate';
 import { evaluateLayers } from '../core/layers';
 import { en, formatIssue, messageFormat } from '../core/messages';
 import type { CvssMessages, CvssMessagesInput, MessageFormat } from '../core/messages';
@@ -407,7 +407,7 @@ export function CvssInput({
       {!readOnly && !disabled && result.issues.some((i) => i.code === 'AMBIGUOUS_VERSION') && (
         <div className="cvss-fixes">
           {(['3.1', '3.0'] as const).map((v) => (
-            <button key={v} type="button" className="cvss-fix" onClick={() => emit(`CVSS:${v}/${text.trim()}`)}>
+            <button key={v} type="button" className="cvss-fix" onClick={() => emit(`CVSS:${v}/${withoutParens(text.trim())}`)}>
               {msg.ui.treatAs(v)}
             </button>
           ))}
@@ -445,6 +445,11 @@ export function CvssInput({
       )}
     </div>
   );
+}
+
+/** Removes parentheses around the whole vector, which a prefix can't go inside. */
+function withoutParens(vector: string): string {
+  return /^\(.*\)$/s.test(vector) ? vector.slice(1, -1).trim() : vector;
 }
 
 function placeholderFor(version: CvssVersion, overlay: boolean): string {
@@ -722,7 +727,9 @@ export function MetricPicker({
 
   // Groups open automatically when a metric in them gets set, but never close by themselves:
   // `byUser` records every open and close, so clearing the last metric leaves a group open.
-  // A new version, or switching into or out of overlay mode, starts over.
+  // A new version, or switching into or out of overlay mode, starts over. Groups that open
+  // automatically are recorded at once, without waiting for a toggle event: a group that is
+  // already open when the scope changes doesn't fire one.
   const scope = `${version} ${baseMetrics !== null}`;
   const autoOpen = groups
     .filter(({ group, metrics: groupMetrics }) =>
@@ -731,13 +738,11 @@ export function MetricPicker({
         : groupMetrics.some((m) => isSet(m.key) || (context?.map[m.key]?.length ?? 0) > 0),
     )
     .map(({ group }) => group);
-  const [openState, setOpenState] = useState(() => ({
-    scope,
-    autoOpen,
-    byUser: {} as Partial<Record<MetricGroup, boolean>>,
-  }));
+  const opened = (list: MetricGroup[]): Partial<Record<MetricGroup, boolean>> =>
+    Object.fromEntries(list.map((g) => [g, true]));
+  const [openState, setOpenState] = useState(() => ({ scope, autoOpen, byUser: opened(autoOpen) }));
   if (openState.scope !== scope) {
-    setOpenState({ scope, autoOpen, byUser: {} });
+    setOpenState({ scope, autoOpen, byUser: opened(autoOpen) });
   } else if (autoOpen.join(' ') !== openState.autoOpen.join(' ')) {
     // Adjust state while rendering, as the React docs recommend, instead of in an effect.
     const added = autoOpen.filter((g) => !openState.autoOpen.includes(g));
@@ -745,7 +750,7 @@ export function MetricPicker({
     for (const g of added) byUser[g] = true;
     setOpenState({ scope, autoOpen, byUser });
   }
-  const isOpen = (group: MetricGroup) => openState.byUser[group] ?? autoOpen.includes(group);
+  const isOpen = (group: MetricGroup) => openState.byUser[group] ?? false;
   const recordToggle = (group: MetricGroup, open: boolean) =>
     setOpenState((s) =>
       s.byUser[group] === open ? s : { ...s, byUser: { ...s.byUser, [group]: open } },
@@ -866,10 +871,13 @@ export function statusMessage(
   format: MessageFormat = messageFormat(messages),
 ): string {
   const ui = messages.ui;
-  const errors = issues.filter((i) => i.severity === 'error');
-  if (errors.length > 0) {
-    const capped = errors.some((i) => i.code === 'TOO_MANY_ISSUES');
-    return ui.statusProblems(capped ? MAX_ISSUES : errors.length, capped, formatIssue(errors[0], messages, format));
+  // A TOO_MANY_ISSUES summary stands for issues that were left out, so it isn't counted as one
+  // problem; it only makes the count a lower bound.
+  const errors = issues.filter((i) => i.severity === 'error' && i.code !== 'TOO_MANY_ISSUES');
+  const capped = issues.some((i) => i.severity === 'error' && i.code === 'TOO_MANY_ISSUES');
+  if (errors.length > 0 || capped) {
+    const first = errors[0] ?? issues.find((i) => i.code === 'TOO_MANY_ISSUES')!;
+    return ui.statusProblems(errors.length, capped, formatIssue(first, messages, format));
   }
   if (!scores) return '';
   const sev = (v: ScoreValue) => messages.severity[v.severity];

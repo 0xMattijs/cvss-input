@@ -169,7 +169,7 @@ export const MAX_ISSUES = 20;
 const at = (seg: { start: number; end: number }) => ({ start: seg.start, end: seg.end });
 
 /** Keeps the first MAX_ISSUES issues and replaces the rest with one summary issue. */
-function capIssues(issues: CvssIssue[]): CvssIssue[] {
+export function capIssues(issues: CvssIssue[]): CvssIssue[] {
   if (issues.length <= MAX_ISSUES) return issues;
   const kept = issues.slice(0, MAX_ISSUES);
   const dropped = issues.slice(MAX_ISSUES);
@@ -224,8 +224,29 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
 
   const t = tokenize(input);
 
+  if (t.nonstandardPrefix) {
+    issues.push(
+      makeIssue('NONSTANDARD_PREFIX', {}, {
+        severity: 'warning',
+        start: t.nonstandardPrefix.start,
+        end: t.nonstandardPrefix.end,
+      }),
+    );
+  }
+
   if (t.segments.length === 0 && t.malformed.length === 0 && !t.unknownPrefix) {
     if (overlay && base) {
+      // A prefix alone must still match the base vector's version.
+      if (t.prefixVersion && t.prefixVersion !== base.version) {
+        issues.push(
+          makeIssue(
+            'VERSION_MISMATCH',
+            { found: t.prefixVersion, expected: base.version!, source: 'base' },
+            { severity: 'error' },
+          ),
+        );
+        return result({ version: base.version, detectedVersion: t.prefixVersion });
+      }
       // An empty overlay is valid: the result is just the base vector.
       return result({
         version: base.version,
@@ -248,15 +269,6 @@ export function evaluate(input: string, options: EvaluateOptions = {}): CvssResu
         { text: t.unknownPrefix.text },
         { severity: 'error', start: t.unknownPrefix.start, end: t.unknownPrefix.end },
       ),
-    );
-  }
-  if (t.nonstandardPrefix) {
-    issues.push(
-      makeIssue('NONSTANDARD_PREFIX', {}, {
-        severity: 'warning',
-        start: t.nonstandardPrefix.start,
-        end: t.nonstandardPrefix.end,
-      }),
     );
   }
 

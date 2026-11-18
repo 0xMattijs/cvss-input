@@ -146,3 +146,17 @@ describe('evaluateLayers', () => {
     });
   });
 });
+
+describe('evaluateLayers edge cases', () => {
+  it('treats an undefined requirement as not set', () => {
+    const r = evaluateLayers(V31, [{ id: 'a', requirements: { C: 'H', I: undefined } }]);
+    expect(r.valid).toBe(true);
+    expect(r.combined).toBe(V31 + '/CR:H');
+  });
+
+  it('rejects a layer vector that is only a prefix for another version', () => {
+    const r = evaluateLayers(V31, [{ id: 'a', vector: 'CVSS:4.0/' }]);
+    expect(r.valid).toBe(false);
+    expect(codes(r)).toContain('VERSION_MISMATCH');
+  });
+});
