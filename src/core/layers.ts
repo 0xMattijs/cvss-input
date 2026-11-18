@@ -1,5 +1,5 @@
 import { VERSIONS, getMetricDef } from './definitions';
-import { evaluate, scoreFor, serialize } from './evaluate';
+import { capIssues, evaluate, scoreFor, serialize } from './evaluate';
 import { en, makeIssue } from './messages';
 import type {
   CvssIssue,
@@ -163,7 +163,8 @@ export function evaluateLayers(
     }
 
     if (layer.requirements) {
-      const levels = Object.values(layer.requirements);
+      // Every key is optional, so an explicit `undefined` counts as not set.
+      const levels = Object.values(layer.requirements).filter((l) => l !== undefined);
       if (levels.some((l) => !['L', 'M', 'H', 'X'].includes(l as string))) {
         add(makeIssue('INVALID_REQUIREMENTS', { layer: layer.id, ...labels(layer.id) }, { severity: 'error' }));
       } else if (!allowed.includes('environmental')) {
@@ -263,7 +264,8 @@ export function evaluateLayers(
     overrides,
     combined: valid ? serialize(version, effectiveMetrics) : null,
     scores: valid ? scoreFor(version, effectiveMetrics, { v2Method }) : null,
-    issues,
+    // Each layer's issues are capped on their own; cap the combined list too.
+    issues: capIssues(issues),
     valid,
   };
 }

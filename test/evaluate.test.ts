@@ -243,6 +243,13 @@ describe('overlay on a base vector', () => {
 
   it('accepts a prefix that matches the base vector', () => {
     expect(evaluate('CVSS:3.1/E:P', { baseVector: base31 }).valid).toBe(true);
+    expect(evaluate('CVSS:3.1', { baseVector: base31 }).valid).toBe(true);
+  });
+
+  it('rejects a prefix alone for another version', () => {
+    const r = evaluate('CVSS:4.0', { baseVector: base31 });
+    expect(r.valid).toBe(false);
+    expect(r.issues.map((i) => i.code)).toEqual(['VERSION_MISMATCH']);
   });
 
   it('rejects a prefix that conflicts with the base vector', () => {

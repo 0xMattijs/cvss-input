@@ -336,3 +336,22 @@ describe('metric groups in the picker', () => {
     expect(groupOf('Attack Vector').open).toBe(false);
   });
 });
+
+describe('review fixes', () => {
+  const groupOf = (metric: string) => metricGroup(metric).closest('details') as HTMLDetailsElement;
+
+  it('adds the prefix inside parentheses around the vector', () => {
+    render(<CvssInput defaultValue="(AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H)" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Treat as CVSS 3.1' }));
+    expect(textbox().value).toBe(V31);
+  });
+
+  it('keeps a group open after a version change when its last metric is cleared', () => {
+    const v30 = V31.replace('3.1', '3.0');
+    render(<CvssInput defaultValue={v30 + '/CR:H'} />);
+    fireEvent.change(textbox(), { target: { value: V31 + '/CR:H' } });
+    expect(groupOf('Confidentiality Requirement').open).toBe(true);
+    fireEvent.click(within(metricGroup('Confidentiality Requirement')).getByLabelText('Not Defined'));
+    expect(groupOf('Confidentiality Requirement').open).toBe(true);
+  });
+});

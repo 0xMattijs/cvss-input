@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import axe from 'axe-core';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CvssCombined, CvssInput, evaluate, nl } from '../src';
+import { CvssCombined, CvssInput, MAX_ISSUES, evaluate, nl } from '../src';
 import { statusMessage } from '../src/react/CvssInput';
 import type { CvssLayer } from '../src';
 
@@ -91,6 +91,14 @@ describe('screen reader support', () => {
       'Final 9.0 Critical (Environmental). Base 9.8 Critical, Temporal 9.3 Critical, Environmental 9.0 Critical.',
     );
     expect(statusMessage(scores(V40), [])).toBe('CVSS-B 9.3 Critical.');
+  });
+
+  it('counts every listed error when some issues were left out', () => {
+    const capped = evaluate(V31 + '/' + 'x/'.repeat(100)).issues;
+    const other = evaluate('CVSS:3.1/AV:Q').issues;
+    const errors = [...capped, ...other].filter((i) => i.severity === 'error' && i.code !== 'TOO_MANY_ISSUES');
+    expect(errors.length).toBeGreaterThan(MAX_ISSUES);
+    expect(statusMessage(null, [...capped, ...other])).toMatch(new RegExp(`^More than ${errors.length} problems\\. `));
   });
 
   it('describes picker radio groups with notes from other layers', () => {
