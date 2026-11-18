@@ -290,3 +290,44 @@ describe('value order in the picker', () => {
     expect(options(/^Confidentiality C$/)).toEqual(['H', 'L', 'N']);
   });
 });
+
+describe('metric groups', () => {
+  const group = (title: string) =>
+    screen.getByText(title, { selector: '.cvss-group > summary' }).closest('details') as HTMLDetailsElement;
+
+  it('scrolls a group the user opens into view', async () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      render(<CvssInput defaultValue={V31} version="3.1" />);
+      const temporal = group('Temporal');
+      expect(temporal.open).toBe(false);
+      fireEvent.click(temporal.querySelector('summary')!);
+      temporal.open = true;
+      fireEvent(temporal, new Event('toggle'));
+      expect(scroll).toHaveBeenCalledTimes(1);
+      expect(scroll.mock.contexts[0]).toBe(temporal);
+      expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ block: 'nearest' }));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it("doesn't scroll a group that starts open or that the user closes", () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      render(<CvssInput defaultValue={V31} version="3.1" />);
+      const base = group('Base');
+      fireEvent(base, new Event('toggle'));
+      fireEvent.click(base.querySelector('summary')!);
+      base.open = false;
+      fireEvent(base, new Event('toggle'));
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+});
