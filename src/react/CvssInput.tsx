@@ -717,15 +717,47 @@ export function MetricPicker({
       .filter((g) => g.metrics.length > 0);
   }, [version, allowedGroups]);
 
-  if (!version) {
+  const def = version ? VERSIONS[version] : null;
+  const isSet = (key: string) => metrics[key] !== undefined && metrics[key] !== def?.notDefined;
+
+  // Groups open automatically when a metric in them gets set, but never close by themselves:
+  // `byUser` records every open and close, so clearing the last metric leaves a group open.
+  // A new version, or switching into or out of overlay mode, starts over.
+  const scope = `${version} ${baseMetrics !== null}`;
+  const autoOpen = groups
+    .filter(({ group, metrics: groupMetrics }) =>
+      group === 'base'
+        ? baseMetrics === null
+        : groupMetrics.some((m) => isSet(m.key) || (context?.map[m.key]?.length ?? 0) > 0),
+    )
+    .map(({ group }) => group);
+  const [openState, setOpenState] = useState(() => ({
+    scope,
+    autoOpen,
+    byUser: {} as Partial<Record<MetricGroup, boolean>>,
+  }));
+  if (openState.scope !== scope) {
+    setOpenState({ scope, autoOpen, byUser: {} });
+  } else if (autoOpen.join(' ') !== openState.autoOpen.join(' ')) {
+    // Adjust state while rendering, as the React docs recommend, instead of in an effect.
+    const added = autoOpen.filter((g) => !openState.autoOpen.includes(g));
+    const byUser = { ...openState.byUser };
+    for (const g of added) byUser[g] = true;
+    setOpenState({ scope, autoOpen, byUser });
+  }
+  const isOpen = (group: MetricGroup) => openState.byUser[group] ?? autoOpen.includes(group);
+  const recordToggle = (group: MetricGroup, open: boolean) =>
+    setOpenState((s) =>
+      s.byUser[group] === open ? s : { ...s, byUser: { ...s.byUser, [group]: open } },
+    );
+
+  if (!version || !def) {
     return (
       <div className="cvss-picker" data-blocked>
         <p className="cvss-picker-note">{msg.ui.pickerUnavailable}</p>
       </div>
     );
   }
-
-  const def = VERSIONS[version];
 
   return (
     <div className="cvss-picker" data-blocked={blocked || undefined}>
@@ -752,16 +784,12 @@ export function MetricPicker({
       {groups.map(({ group, metrics: groupMetrics }) => {
         const readOnlyGroup = baseMetrics !== null && group === 'base';
         const source = readOnlyGroup ? baseMetrics : metrics;
-        const anySet = groupMetrics.some(
-          (m) =>
-            (source[m.key] !== undefined && source[m.key] !== def.notDefined) ||
-            (context?.map[m.key]?.length ?? 0) > 0,
-        );
         return (
           <details
             key={group}
             className="cvss-group"
-            open={!readOnlyGroup && (group === 'base' || anySet) ? true : undefined}
+            open={isOpen(group) || undefined}
+            onToggle={(e) => recordToggle(group, e.currentTarget.open)}
           >
             <summary>
               {msg.groups[group]}
@@ -771,7 +799,7 @@ export function MetricPicker({
               {groupMetrics.map((m) => {
                 const current = source[m.key] ?? (m.required ? undefined : def.notDefined ?? undefined);
                 const others = readOnlyGroup ? [] : (context?.map[m.key] ?? []);
-                const ownSet = !readOnlyGroup && metrics[m.key] !== undefined && metrics[m.key] !== def.notDefined;
+                const ownSet = !readOnlyGroup && isSet(m.key);
                 const winner = context?.provenance[m.key];
                 let ownNote: string | null = null;
                 if (ownSet && others.length > 0 && context && winner !== context.ownId) {
